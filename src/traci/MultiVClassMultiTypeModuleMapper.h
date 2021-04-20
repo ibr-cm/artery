@@ -8,7 +8,7 @@
 #define MULTIVCLASSMULTITYPEMODULEMAPPER_H
 
 #include "traci/BasicNodeManager.h"
-#include "traci/ModuleMapper.h"
+#include "traci/MultiTypeModuleMapper.h"
 #include <omnetpp/csimplemodule.h>
 #include <tuple>
 #include <vector>
@@ -21,7 +21,7 @@ namespace omnetpp {
 namespace traci
 {
 
-class MultiVClassMultiTypeModuleMapper : public ModuleMapper, public omnetpp::cSimpleModule
+class MultiVClassMultiTypeModuleMapper : public MultiTypeModuleMapper
 {
 public:
 	void initialize() override;

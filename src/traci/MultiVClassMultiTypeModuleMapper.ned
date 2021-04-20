@@ -1,9 +1,8 @@
 package traci;
 
-simple MultiVClassMultiTypeModuleMapper like ModuleMapper
+simple MultiVClassMultiTypeModuleMapper extends MultiTypeModuleMapper
 {
     parameters:
         @class(traci::MultiVClassMultiTypeModuleMapper);
-        xml vehicleTypes;
         string basicNodeManager;
 }

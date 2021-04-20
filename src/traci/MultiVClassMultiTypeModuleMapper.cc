@@ -14,6 +14,9 @@ Define_Module(MultiVClassMultiTypeModuleMapper)
 
 void MultiVClassMultiTypeModuleMapper::initialize()
 {
+	auto personTypes = par("personTypes").xmlValue();
+	parsePersonTypes(personTypes);
+
 	auto vehicleTypes = par("vehicleTypes").xmlValue();
 	parseVehicleTypes(vehicleTypes);
 
