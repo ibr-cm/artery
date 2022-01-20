@@ -67,15 +67,58 @@ void LocalEnvironmentModel::receiveSignal(cComponent*, simsignal_t signal, cObje
 
 void LocalEnvironmentModel::complementObjects(const SensorDetection& detection, const Sensor& sensor)
 {
-   for (auto& detectedObject : detection.objects) {
-      auto foundObject = mObjects.find(detectedObject);
-      if (foundObject != mObjects.end()) {
-         Tracking& tracking = foundObject->second;
-         tracking.tap(&sensor);
-      } else {
-         mObjects.emplace(detectedObject, Tracking { ++mTrackingCounter, &sensor });
-      }
-   }
+    
+    for (auto& detectedObject : detection.objects) {//check if objects are already tracked by a sensor
+        auto foundObject = mObjects.find(detectedObject);
+        if (foundObject != mObjects.end()) {
+            Tracking& tracking = foundObject->second;
+            tracking.tap(&sensor);
+            if (!(detectedObject->getNoisyOutline().empty())) {//check if noisyOutline is used sensor.hasNoise()
+                tracking.addNoiseValue(&sensor, detectedObject->getNoisyOutline());
+                //std::cout << "not empty sensor: " << sensor.getSensorName() << " detectedObject: " << detectedObject->getExternalId() <<"\n";
+                /*auto &stuff = tracking.mNoisyPositions;
+                std::cout << "Old Tracking added by: " << sensor.getSensorName() << " NoisyPositions size: " << stuff.size();
+                std::cout << " Object: " << detectedObject->getExternalId() << " Position:\n";
+                for (auto itOb = detectedObject->getOutline().begin(); itOb != detectedObject->getOutline().end(); itOb++) {
+                    std::cout << " x: " << itOb->x.value();
+                    std::cout << " y: " << itOb->y.value();
+                }     
+                std::cout << "\n";
+                for (auto itstuff = stuff.begin(); itstuff != stuff.end(); itstuff++) {
+                    std::cout << " sensor: " << itstuff->first->getSensorName() << "\n";
+                    for (auto ittstuff = itstuff->second.begin(); ittstuff != itstuff->second.end() ; ittstuff++) {
+                        std::cout << " x: " << ittstuff->x.value() << " y: " << ittstuff->y.value();
+                    }
+                }
+                std::cout << "\n";*/
+            }
+        } else {
+            if (!(detectedObject->getNoisyOutline().empty())) {//check if noisyOutline is used sensor.hasNoise()
+                mObjects.emplace(detectedObject, Tracking { ++mTrackingCounter, &sensor, detectedObject->getNoisyOutline() });  
+                //std::cout << "NEW not empty sensor: " << sensor.getSensorName() << "\n";     
+                /*auto foundObjectTWO = mObjects.find(detectedObject);
+                Tracking& nostuff = foundObjectTWO->second;
+                auto &stuff = nostuff.mNoisyPositions;
+                std::cout << "New Tracking added by: " << sensor.getSensorName() << " NoisyPositions size: " << stuff.size();
+                std::cout << " Object: " << detectedObject->getExternalId() << " Position:\n";
+                for (auto itOb = detectedObject->getOutline().begin(); itOb != detectedObject->getOutline().end(); itOb++) {
+                    std::cout << " x: " << itOb->x.value();
+                    std::cout << " y: " << itOb->y.value();
+                }     
+                std::cout << "\n";
+                for (auto itstuff = stuff.begin(); itstuff != stuff.end(); itstuff++) {
+                    std::cout << " sensor: " << itstuff->first->getSensorName() << "\n";
+                    for (auto ittstuff = itstuff->second.begin(); ittstuff != itstuff->second.end() ; ittstuff++) {
+                        std::cout << " x: " << ittstuff->x.value() << " y: " << ittstuff->y.value();
+                    }
+                }
+                std::cout << "\n";*/
+            } else {
+                mObjects.emplace(detectedObject, Tracking { ++mTrackingCounter, &sensor });
+            }
+        }
+        detectedObject->removeNoisyOutline();//delete noisyOutline from GlobalEnvironmentModel -> next sensor may have no noise
+    }
 }
 
 void LocalEnvironmentModel::update()
@@ -132,10 +175,25 @@ void LocalEnvironmentModel::initializeSensors()
     }
 }
 
-
 LocalEnvironmentModel::Tracking::Tracking(int id, const Sensor* sensor) : mId(id)
 {
     mSensors.emplace(sensor, TrackingTime {});
+}
+
+LocalEnvironmentModel::Tracking::Tracking(int id, const Sensor* sensor, std::vector<Position> noisePosition) : mId(id)
+{
+    mSensors.emplace(sensor, TrackingTime {});
+    mNoisyPositions.emplace(sensor, noisePosition);
+}
+
+void LocalEnvironmentModel::Tracking::addNoiseValue(const Sensor* sensor, std::vector<Position> noisyPosition)
+{
+    auto found = mNoisyPositions.find(sensor);
+    if (found != mNoisyPositions.end()) {
+        found->second = noisyPosition;
+    } else {
+        mNoisyPositions.emplace(sensor, noisyPosition);
+    }
 }
 
 bool LocalEnvironmentModel::Tracking::expired() const
@@ -151,7 +209,11 @@ void LocalEnvironmentModel::Tracking::update()
 
       const bool expired = tracking.last() + sensor->getValidityPeriod() < simTime();
       if (expired) {
-          it = mSensors.erase(it);
+            it = mSensors.erase(it);
+            auto found = mNoisyPositions.find(sensor);//if sensor entry also has noise data stored, delete it
+            if (found != mNoisyPositions.end()) {
+                mNoisyPositions.erase(found);
+            }  
       } else {
           ++it;
       }

@@ -48,6 +48,24 @@ public:
     const std::vector<Position>& getOutline() const { return mOutline; }
 
     /**
+     * Returns the polygon describing the object's noisy outline
+     * @return noisy polygon points
+     */
+    const std::vector<Position> getNoisyOutline() const { return mNoisyOutline; }
+
+    /**
+     * Sets the polygon describing the object's noisy outline
+     * @return nothing
+     */
+    void setNoisyOutline(std::vector<Position>);
+
+    /**
+     * deletes the polygon describing the object's noisy outline
+     * @return nothing
+     */
+    void removeNoisyOutline();
+    
+    /**
      * Returns a sensor attachment point of the vehicle object
      * @param pos logical position of sensor
      * @return sensor attachment point
@@ -82,6 +100,7 @@ private:
     traci::VehicleType::Length mWidth;
     traci::VehicleType::Length mRadius;
     std::vector<Position> mOutline;
+    std::vector<Position> mNoisyOutline;//added this
     std::vector<Position> mAttachmentPoints;
     Position mCentrePoint;
 };

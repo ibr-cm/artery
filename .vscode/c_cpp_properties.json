@@ -1,0 +1,15 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "/home/cengiz/Dokumente/omnetpp-5.6.2/include",
+                "${workspaceFolder}/**"
+            ],
+            "intelliSenseMode": "${default}",
+            "compilerPath": "/usr/bin/clang++",
+            "configurationProvider": "ms-vscode.cmake-tools"
+        }
+    ],
+    "version": 4
+}

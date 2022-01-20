@@ -12,6 +12,8 @@ struct FieldOfView
 {
     boost::units::quantity<boost::units::si::length> range;
     boost::units::quantity<boost::units::degree::plane_angle> angle;
+    double angleError = 0.0; /*< stddev for the normal distribution of the angle/azimuth noise */
+    double rangeError = 0.0; /*< stddev for the normal distribution of the range noise */
 };
 
 } // namespace artery

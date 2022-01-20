@@ -16,6 +16,7 @@
 #include <map>
 #include <memory>
 #include <vector>
+#include <artery/utility/Geometry.h>
 
 namespace artery
 {
@@ -55,19 +56,23 @@ public:
     {
     public:
         using TrackingMap = std::map<const Sensor*, TrackingTime>;
+        using NoiseMap = std::map<const Sensor*, std::vector<Position>>;
 
+        Tracking(int id, const Sensor* sensor, std::vector<Position> noisePosition);
         Tracking(int id, const Sensor* sensor);
 
         bool expired() const;
         void update();
         void tap(const Sensor*);
+        void addNoiseValue(const Sensor* sensor, std::vector<Position>);
 
         int id() const { return mId; }
         const TrackingMap& sensors() const { return mSensors; }
-
+        NoiseMap mNoisyPositions;
     private:
         int mId;
         TrackingMap mSensors;
+        
     };
 
     using TrackedObjects = std::map<Object, Tracking, std::owner_less<Object>>;
