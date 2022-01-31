@@ -52,6 +52,9 @@ protected:
     void refreshDisplay() const override;
     virtual SensorDetection createSensorCone() const;
 
+    void measureDimensions(std::vector<Position> *visiblePositions, double *width, double *length, double *centreX, double *centreY) const;
+    bool isNoisy() const override { return true;};
+
     SensorConfigFov mFovConfig;
     Updatable<SensorDetection> mLastDetection;
     bool mDrawLinesOfSight;

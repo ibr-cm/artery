@@ -15,8 +15,10 @@ moduleinterface RealisticFovSensor
         int numSegments;
         bool doLineOfSightCheck;
 
-        double noiseVarAngle; //degree
-        double noiseVarRange @unit(m);
+        double angleAccuracy; //degree
+        double rangeAccuracy @unit(m);
+        double angleResolution; //degree
+        double rangeResolution @unit(m);
 
         // visualization paramaters
         bool drawSensorCone; // draw sensor cone polygon

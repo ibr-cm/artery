@@ -70,49 +70,44 @@ void LocalEnvironmentModel::complementObjects(const SensorDetection& detection, 
     
     for (auto& detectedObject : detection.objects) {//check if objects are already tracked by a sensor
         auto foundObject = mObjects.find(detectedObject);
+        std::shared_ptr<EnvironmentModelObjectWrapper> pointer = nullptr;
+        for (auto objectWr : detection.objectWrapper) {
+            for (auto objectWrPtr : objectWr->getObjects()) {
+                if (detectedObject == objectWrPtr) {
+                    pointer = std::shared_ptr<EnvironmentModelObjectWrapper>(objectWr);
+                }
+            }
+        }
         if (foundObject != mObjects.end()) {
             Tracking& tracking = foundObject->second;
             tracking.tap(&sensor);
-            if (!(detectedObject->getNoisyOutline().empty())) {//check if noisyOutline is used sensor.hasNoise()
+            if (sensor.isNoisy()) {//check if noisyOutline is used sensor.hasNoise()
                 tracking.addNoiseValue(&sensor, detectedObject->getNoisyOutline());
-                //std::cout << "not empty sensor: " << sensor.getSensorName() << " detectedObject: " << detectedObject->getExternalId() <<"\n";
-                /*auto &stuff = tracking.mNoisyPositions;
-                std::cout << "Old Tracking added by: " << sensor.getSensorName() << " NoisyPositions size: " << stuff.size();
-                std::cout << " Object: " << detectedObject->getExternalId() << " Position:\n";
-                for (auto itOb = detectedObject->getOutline().begin(); itOb != detectedObject->getOutline().end(); itOb++) {
-                    std::cout << " x: " << itOb->x.value();
-                    std::cout << " y: " << itOb->y.value();
-                }     
-                std::cout << "\n";
-                for (auto itstuff = stuff.begin(); itstuff != stuff.end(); itstuff++) {
-                    std::cout << " sensor: " << itstuff->first->getSensorName() << "\n";
-                    for (auto ittstuff = itstuff->second.begin(); ittstuff != itstuff->second.end() ; ittstuff++) {
-                        std::cout << " x: " << ittstuff->x.value() << " y: " << ittstuff->y.value();
-                    }
+                tracking.addObjectWrapper(&sensor, pointer);
+                for (auto& wrapper : tracking.mWrapperObject) {
+                    auto wrapperptr = wrapper.second;
+                    std::cout << wrapperptr->getNoisyOutline().size() << " visible Points. Looking at: " << detectedObject->getExternalId()<<"\n";
+                    std::cout << "X " << detectedObject->getCentrePoint().x.value() << " Y " <<detectedObject->getCentrePoint().y.value() << "\n";
+                    std::cout << "newX " << wrapperptr->getCentrePoint().x.value() << " newY " << wrapperptr->getCentrePoint().y.value() << "\n";
+                    std::cout << "L " << detectedObject->getLength().value() << " W " << detectedObject->getWidth().value() <<"\n";
+                    std::cout << "newL " << wrapperptr->getLength().value() << " newW " << wrapperptr->getWidth().value() <<"\n";
                 }
-                std::cout << "\n";*/
+                std::cout << "\n";
             }
         } else {
-            if (!(detectedObject->getNoisyOutline().empty())) {//check if noisyOutline is used sensor.hasNoise()
-                mObjects.emplace(detectedObject, Tracking { ++mTrackingCounter, &sensor, detectedObject->getNoisyOutline() });  
-                //std::cout << "NEW not empty sensor: " << sensor.getSensorName() << "\n";     
-                /*auto foundObjectTWO = mObjects.find(detectedObject);
-                Tracking& nostuff = foundObjectTWO->second;
-                auto &stuff = nostuff.mNoisyPositions;
-                std::cout << "New Tracking added by: " << sensor.getSensorName() << " NoisyPositions size: " << stuff.size();
-                std::cout << " Object: " << detectedObject->getExternalId() << " Position:\n";
-                for (auto itOb = detectedObject->getOutline().begin(); itOb != detectedObject->getOutline().end(); itOb++) {
-                    std::cout << " x: " << itOb->x.value();
-                    std::cout << " y: " << itOb->y.value();
-                }     
-                std::cout << "\n";
-                for (auto itstuff = stuff.begin(); itstuff != stuff.end(); itstuff++) {
-                    std::cout << " sensor: " << itstuff->first->getSensorName() << "\n";
-                    for (auto ittstuff = itstuff->second.begin(); ittstuff != itstuff->second.end() ; ittstuff++) {
-                        std::cout << " x: " << ittstuff->x.value() << " y: " << ittstuff->y.value();
-                    }
+            if (sensor.isNoisy()) {//check if noisyOutline is used sensor.hasNoise()
+                mObjects.emplace(detectedObject, Tracking { ++mTrackingCounter, &sensor, detectedObject->getNoisyOutline(), pointer});
+                auto found = mObjects.find(detectedObject);
+                Tracking& tracking = found->second;
+                for (auto& wrapper : tracking.mWrapperObject) {
+                    auto wrapperptr = wrapper.second;
+                    std::cout << wrapperptr->getNoisyOutline().size() <<" visible Points. Looking at: " << detectedObject->getExternalId()<<"\n";
+                    std::cout << "X " << detectedObject->getCentrePoint().x.value() << " Y " <<detectedObject->getCentrePoint().y.value() << "\n";
+                    std::cout << "newX " << wrapperptr->getCentrePoint().x.value() << " newY " << wrapperptr->getCentrePoint().y.value() << "\n";
+                    std::cout << "L " << detectedObject->getLength().value() << " W " << detectedObject->getWidth().value() <<"\n";
+                    std::cout << "newL " << wrapperptr->getLength().value() << " newW " << wrapperptr->getWidth().value() <<"\n";
                 }
-                std::cout << "\n";*/
+                std::cout << "\n";
             } else {
                 mObjects.emplace(detectedObject, Tracking { ++mTrackingCounter, &sensor });
             }
@@ -186,6 +181,13 @@ LocalEnvironmentModel::Tracking::Tracking(int id, const Sensor* sensor, std::vec
     mNoisyPositions.emplace(sensor, noisePosition);
 }
 
+LocalEnvironmentModel::Tracking::Tracking(int id, const Sensor* sensor, std::vector<Position> noisePosition, std::shared_ptr<EnvironmentModelObjectWrapper> wrapperObject) : mId(id)
+{
+    mSensors.emplace(sensor, TrackingTime {});
+    mNoisyPositions.emplace(sensor, noisePosition);
+    mWrapperObject.emplace(sensor, wrapperObject);
+}
+
 void LocalEnvironmentModel::Tracking::addNoiseValue(const Sensor* sensor, std::vector<Position> noisyPosition)
 {
     auto found = mNoisyPositions.find(sensor);
@@ -193,6 +195,16 @@ void LocalEnvironmentModel::Tracking::addNoiseValue(const Sensor* sensor, std::v
         found->second = noisyPosition;
     } else {
         mNoisyPositions.emplace(sensor, noisyPosition);
+    }
+}
+
+void LocalEnvironmentModel::Tracking::addObjectWrapper(const Sensor* sensor, std::shared_ptr<EnvironmentModelObjectWrapper> wrapper)
+{
+    auto found = mWrapperObject.find(sensor);
+    if (found != mWrapperObject.end()) {
+        found->second = wrapper;
+    } else {
+        mWrapperObject.emplace(sensor, wrapper);
     }
 }
 
@@ -210,9 +222,13 @@ void LocalEnvironmentModel::Tracking::update()
       const bool expired = tracking.last() + sensor->getValidityPeriod() < simTime();
       if (expired) {
             it = mSensors.erase(it);
-            auto found = mNoisyPositions.find(sensor);//if sensor entry also has noise data stored, delete it
-            if (found != mNoisyPositions.end()) {
-                mNoisyPositions.erase(found);
+            auto foundNoise = mNoisyPositions.find(sensor);//if sensor entry also has noise data stored, delete it
+            if (foundNoise != mNoisyPositions.end()) {
+                mNoisyPositions.erase(foundNoise);
+            }
+            auto foundWrapper = mWrapperObject.find(sensor);//if sensor entry also has wrapperObject stored, delete it TODO: check how to delete if multiple objects are referenced
+            if (foundWrapper != mWrapperObject.end()) {
+                mWrapperObject.erase(foundWrapper);
             }  
       } else {
           ++it;

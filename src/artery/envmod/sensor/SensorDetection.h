@@ -8,6 +8,7 @@
 #define SENSORDETECTION_H_TLUSLFDM
 
 #include "artery/envmod/EnvironmentModelObject.h"
+#include "artery/envmod/EnvironmentModelObjectWrapper.h"
 #include "artery/envmod/EnvironmentModelObstacle.h"
 #include "artery/utility/Geometry.h"
 #include <list>
@@ -24,6 +25,7 @@ struct SensorDetection
     std::list<std::shared_ptr<EnvironmentModelObject>> objects;
     std::list<std::shared_ptr<EnvironmentModelObstacle>> obstacles;
     std::list<Position> visiblePoints; // LOS = one of these points and first of sensorCone
+    std::vector<std::shared_ptr<EnvironmentModelObjectWrapper>> objectWrapper;
 };
 
 } // namespace artery

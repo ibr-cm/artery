@@ -126,6 +126,9 @@
         "viewport": "cpp",
         "timer": "cpp",
         "config": "cpp",
-        "containers": "cpp"
+        "containers": "cpp",
+        "plane": "cpp",
+        "boundingbox": "cpp",
+        "boundingsphere": "cpp"
     }
 }

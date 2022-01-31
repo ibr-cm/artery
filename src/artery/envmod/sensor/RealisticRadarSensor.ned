@@ -15,8 +15,10 @@ simple RealisticRadarSensor like RealisticFovSensor
         int numSegments = default(1);
         bool doLineOfSightCheck = default(true);
 
-        double noiseVarAngle = default(0.0); // degree
-        double noiseVarRange @unit(m) = default(0.0 m); 
+        double angleAccuracy = default(0.0); // degree
+        double rangeAccuracy @unit(m) = default(0.0 m); 
+        double angleResolution = default(0.0); // degree
+        double rangeResolution @unit(m) = default(0.0 m); 
 
         bool drawSensorCone = default(false);
         bool drawDetectedObjects = default(false);
