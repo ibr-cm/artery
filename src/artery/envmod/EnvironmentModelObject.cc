@@ -104,29 +104,6 @@ void EnvironmentModelObject::update()
     boost::geometry::transform(squareAttachmentPoints, mAttachmentPoints, affine);
 }
 
-void EnvironmentModelObject::removeNoisyOutline()
-{
-    mNoisyOutline.clear();
-}
-
-void EnvironmentModelObject::removeNoisyOutlinePoint(Position pos)
-{
-    for (std::vector<Position>::iterator it = mNoisyOutline.begin(); it != mNoisyOutline.end();) {
-        if (it->x.value() == pos.x.value() && it->y.value() == pos.y.value()) {
-            mNoisyOutline.erase(it);     
-        } else {
-            ++it;
-            
-        }
-    }
-}
-
-void EnvironmentModelObject::setNoisyOutline(std::vector<Position> newNoisyOutline)
-{
-    removeNoisyOutline();
-    mNoisyOutline = newNoisyOutline;
-}
-
 std::string EnvironmentModelObject::getExternalId() const
 {
     return mVehicleController->getVehicleId();

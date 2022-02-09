@@ -15,12 +15,12 @@ namespace artery
 using Length = traci::VehicleType::Length;
 
 
-EnvironmentModelObjectWrapper::EnvironmentModelObjectWrapper(std::vector<std::shared_ptr<EnvironmentModelObject>> objectList, std::vector<Position> noisyPos, Length totalWidth, Length totalLength, Position centre)
+EnvironmentModelObjectWrapper::EnvironmentModelObjectWrapper(std::vector<std::shared_ptr<EnvironmentModelObject>> objectList, std::vector<Position> noisyPos, Length dimension1, Length dimension2, Position centre)
 {
     mObjects = objectList;
     mNoisyOutline = noisyPos;
-    mLength = totalLength;
-    mWidth = totalWidth;
+    mDimension2 = dimension2;
+    mDimension1 = dimension1;
     mCentrePoint = centre;
 }
 

@@ -67,52 +67,33 @@ void LocalEnvironmentModel::receiveSignal(cComponent*, simsignal_t signal, cObje
 
 void LocalEnvironmentModel::complementObjects(const SensorDetection& detection, const Sensor& sensor)
 {
-    
     for (auto& detectedObject : detection.objects) {//check if objects are already tracked by a sensor
         auto foundObject = mObjects.find(detectedObject);
-        std::shared_ptr<EnvironmentModelObjectWrapper> pointer = nullptr;
+        std::shared_ptr<EnvironmentModelObjectWrapper> wrapperPointer = nullptr;
         for (auto objectWr : detection.objectWrapper) {
             for (auto objectWrPtr : objectWr->getObjects()) {
                 if (detectedObject == objectWrPtr) {
-                    pointer = std::shared_ptr<EnvironmentModelObjectWrapper>(objectWr);
+                    wrapperPointer = std::shared_ptr<EnvironmentModelObjectWrapper>(objectWr);
+                    break;
                 }
             }
-        }
+            if (wrapperPointer != nullptr) {
+                break;
+            }
+        }//TODO check if pointer could be null
         if (foundObject != mObjects.end()) {
             Tracking& tracking = foundObject->second;
             tracking.tap(&sensor);
-            if (sensor.isNoisy()) {//check if noisyOutline is used sensor.hasNoise()
-                tracking.addNoiseValue(&sensor, detectedObject->getNoisyOutline());
-                tracking.addObjectWrapper(&sensor, pointer);
-                for (auto& wrapper : tracking.mWrapperObject) {
-                    auto wrapperptr = wrapper.second;
-                    std::cout << wrapperptr->getNoisyOutline().size() << " visible Points. Looking at: " << detectedObject->getExternalId()<<"\n";
-                    std::cout << "X " << detectedObject->getCentrePoint().x.value() << " Y " <<detectedObject->getCentrePoint().y.value() << "\n";
-                    std::cout << "newX " << wrapperptr->getCentrePoint().x.value() << " newY " << wrapperptr->getCentrePoint().y.value() << "\n";
-                    std::cout << "L " << detectedObject->getLength().value() << " W " << detectedObject->getWidth().value() <<"\n";
-                    std::cout << "newL " << wrapperptr->getLength().value() << " newW " << wrapperptr->getWidth().value() <<"\n";
-                }
-                std::cout << "\n";
+            if (sensor.isNoisy()) {//check if sensor is noisy
+                tracking.addObjectWrapper(&sensor, wrapperPointer);
             }
         } else {
-            if (sensor.isNoisy()) {//check if noisyOutline is used sensor.hasNoise()
-                mObjects.emplace(detectedObject, Tracking { ++mTrackingCounter, &sensor, detectedObject->getNoisyOutline(), pointer});
-                auto found = mObjects.find(detectedObject);
-                Tracking& tracking = found->second;
-                for (auto& wrapper : tracking.mWrapperObject) {
-                    auto wrapperptr = wrapper.second;
-                    std::cout << wrapperptr->getNoisyOutline().size() <<" visible Points. Looking at: " << detectedObject->getExternalId()<<"\n";
-                    std::cout << "X " << detectedObject->getCentrePoint().x.value() << " Y " <<detectedObject->getCentrePoint().y.value() << "\n";
-                    std::cout << "newX " << wrapperptr->getCentrePoint().x.value() << " newY " << wrapperptr->getCentrePoint().y.value() << "\n";
-                    std::cout << "L " << detectedObject->getLength().value() << " W " << detectedObject->getWidth().value() <<"\n";
-                    std::cout << "newL " << wrapperptr->getLength().value() << " newW " << wrapperptr->getWidth().value() <<"\n";
-                }
-                std::cout << "\n";
+            if (sensor.isNoisy()) {//check if sensor is noisy
+                mObjects.emplace(detectedObject, Tracking { ++mTrackingCounter, &sensor, wrapperPointer});
             } else {
                 mObjects.emplace(detectedObject, Tracking { ++mTrackingCounter, &sensor });
             }
         }
-        detectedObject->removeNoisyOutline();//delete noisyOutline from GlobalEnvironmentModel -> next sensor may have no noise
     }
 }
 
@@ -175,27 +156,10 @@ LocalEnvironmentModel::Tracking::Tracking(int id, const Sensor* sensor) : mId(id
     mSensors.emplace(sensor, TrackingTime {});
 }
 
-LocalEnvironmentModel::Tracking::Tracking(int id, const Sensor* sensor, std::vector<Position> noisePosition) : mId(id)
+LocalEnvironmentModel::Tracking::Tracking(int id, const Sensor* sensor, std::shared_ptr<EnvironmentModelObjectWrapper> wrapperObject) : mId(id)
 {
     mSensors.emplace(sensor, TrackingTime {});
-    mNoisyPositions.emplace(sensor, noisePosition);
-}
-
-LocalEnvironmentModel::Tracking::Tracking(int id, const Sensor* sensor, std::vector<Position> noisePosition, std::shared_ptr<EnvironmentModelObjectWrapper> wrapperObject) : mId(id)
-{
-    mSensors.emplace(sensor, TrackingTime {});
-    mNoisyPositions.emplace(sensor, noisePosition);
     mWrapperObject.emplace(sensor, wrapperObject);
-}
-
-void LocalEnvironmentModel::Tracking::addNoiseValue(const Sensor* sensor, std::vector<Position> noisyPosition)
-{
-    auto found = mNoisyPositions.find(sensor);
-    if (found != mNoisyPositions.end()) {
-        found->second = noisyPosition;
-    } else {
-        mNoisyPositions.emplace(sensor, noisyPosition);
-    }
 }
 
 void LocalEnvironmentModel::Tracking::addObjectWrapper(const Sensor* sensor, std::shared_ptr<EnvironmentModelObjectWrapper> wrapper)
@@ -222,11 +186,7 @@ void LocalEnvironmentModel::Tracking::update()
       const bool expired = tracking.last() + sensor->getValidityPeriod() < simTime();
       if (expired) {
             it = mSensors.erase(it);
-            auto foundNoise = mNoisyPositions.find(sensor);//if sensor entry also has noise data stored, delete it
-            if (foundNoise != mNoisyPositions.end()) {
-                mNoisyPositions.erase(foundNoise);
-            }
-            auto foundWrapper = mWrapperObject.find(sensor);//if sensor entry also has wrapperObject stored, delete it TODO: check how to delete if multiple objects are referenced
+            auto foundWrapper = mWrapperObject.find(sensor);//if sensor entry also has wrapperObject stored, delete it
             if (foundWrapper != mWrapperObject.end()) {
                 mWrapperObject.erase(foundWrapper);
             }  

@@ -129,6 +129,20 @@
         "containers": "cpp",
         "plane": "cpp",
         "boundingbox": "cpp",
-        "boundingsphere": "cpp"
+        "boundingsphere": "cpp",
+        "animationpath": "cpp",
+        "observernodepath": "cpp",
+        "polytope": "cpp",
+        "vertexarraystate": "cpp",
+        "buffered_value": "cpp",
+        "fast_back_stack": "cpp",
+        "databaserevisions": "cpp",
+        "iotypes": "cpp",
+        "uri": "cpp",
+        "expression": "cpp",
+        "style": "cpp",
+        "stategraph": "cpp",
+        "callback": "cpp",
+        "image": "cpp"
     }
 }

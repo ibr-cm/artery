@@ -57,22 +57,20 @@ public:
     {
     public:
         using TrackingMap = std::map<const Sensor*, TrackingTime>;
-        using NoiseMap = std::map<const Sensor*, std::vector<Position>>;
+
         using ObjectMap = std::map<const Sensor*, std::shared_ptr<EnvironmentModelObjectWrapper>>;
 
-        Tracking(int id, const Sensor* sensor, std::vector<Position> noisePosition, std::shared_ptr<EnvironmentModelObjectWrapper> wrapperObject);
-        Tracking(int id, const Sensor* sensor, std::vector<Position> noisePosition);
+        Tracking(int id, const Sensor* sensor, std::shared_ptr<EnvironmentModelObjectWrapper> wrapperObject);
         Tracking(int id, const Sensor* sensor);
 
         bool expired() const;
         void update();
         void tap(const Sensor*);
-        void addNoiseValue(const Sensor* sensor, std::vector<Position>);
         void addObjectWrapper(const Sensor* sensor, std::shared_ptr<EnvironmentModelObjectWrapper> wrapper);
 
         int id() const { return mId; }
         const TrackingMap& sensors() const { return mSensors; }
-        NoiseMap mNoisyPositions;
+
         ObjectMap mWrapperObject;
     private:
         int mId;

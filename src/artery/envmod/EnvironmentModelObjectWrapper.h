@@ -24,8 +24,8 @@ class EnvironmentModelObjectWrapper
 public:
     using Length = traci::VehicleType::Length;
 
-
-    EnvironmentModelObjectWrapper(std::vector<std::shared_ptr<EnvironmentModelObject>> objectList, std::vector<Position> noisyPos, Length totalWidth, Length totalLength, Position centre);
+    //lengthDimension1 was width, lengthDimension2 was length of an object
+    EnvironmentModelObjectWrapper(std::vector<std::shared_ptr<EnvironmentModelObject>> objectList, std::vector<Position> noisyPos, Length dimension1, Length dimension2, Position centre);
     /**
      * Returns all EnvironmentModelObjects describing the wrapper object
      * @return vector of all included EnvironmentModelObjects
@@ -44,9 +44,9 @@ public:
      */
     const Position& getCentrePoint() const { return mCentrePoint; }
 
-    Length getLength() const { return mLength; }
+    Length getDimension2() const { return mDimension2; }
 
-    Length getWidth() const { return mWidth; }
+    Length getDimension1() const { return mDimension1; }
 
     /**
      * Return outer object radius
@@ -57,8 +57,8 @@ public:
     //Length getRadius() const { return mRadius; }
 
 private:
-    traci::VehicleType::Length mLength;
-    traci::VehicleType::Length mWidth;
+    traci::VehicleType::Length mDimension2;//length
+    traci::VehicleType::Length mDimension1;//width
     //traci::VehicleType::Length mRadius;
     std::vector<Position> mNoisyOutline;
     std::vector<std::shared_ptr<EnvironmentModelObject>> mObjects;
