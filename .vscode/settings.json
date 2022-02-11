@@ -143,6 +143,8 @@
         "style": "cpp",
         "stategraph": "cpp",
         "callback": "cpp",
-        "image": "cpp"
+        "image": "cpp",
+        "kdtree": "cpp",
+        "elevationpool": "cpp"
     }
 }

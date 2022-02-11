@@ -58,7 +58,7 @@ protected:
     SensorConfigFov mFovConfig;
     Updatable<SensorDetection> mLastDetection;
     bool mDrawLinesOfSight;
-
+    
 private:
     omnetpp::cFigure::Color mColor;
     omnetpp::cGroupFigure* mGroupFigure;

@@ -23,7 +23,7 @@
 using namespace omnetpp;
 
 using LineOfSight = std::array<artery::Position, 2>;
-struct Node {std::string name ="noname"; std::shared_ptr<artery::EnvironmentModelObject> ptr;};
+struct Node {std::shared_ptr<artery::EnvironmentModelObject> objectPtr;};
 using AdjList = boost::adjacency_list<boost::vecS, boost::vecS, boost::undirectedS, Node>;
 BOOST_GEOMETRY_REGISTER_LINESTRING(LineOfSight)
 
@@ -101,7 +101,6 @@ SensorDetection RealisticFovSensor::detectObjects() const
     {
         std::unordered_set<std::shared_ptr<EnvironmentModelObstacle>> blockingObstacles;
         auto graph = AdjList();
-        //std::map<std::string, boost::detail::adj_list_gen<AdjList, boost::setS, boost::setS, boost::undirectedS, boost::no_property, boost::no_property, boost::no_property, boost::listS>::config::vertex_descriptor> graphPropertyMap;
         std::map<std::string, boost::graph_traits<AdjList>::vertex_descriptor> graphPropertyMap;
         std::map<std::shared_ptr<EnvironmentModelObject>, std::vector<Position>> noisyMap;
         // check if objects in sensor cone are hidden by another object or an obstacle
@@ -127,7 +126,12 @@ SensorDetection RealisticFovSensor::detectObjects() const
                 bool noObstacleOccultation = std::none_of(obstacleIntersections.begin(), obstacleIntersections.end(),
                         [&](const std::shared_ptr<EnvironmentModelObstacle>& obstacle) {
                             ASSERT(obstacle);
-                            return bg::intersects(lineOfSight, obstacle->getOutline());
+                            if (bg::intersects(lineOfSight, obstacle->getOutline())) {
+                                blockingObstacles.insert(obstacle);
+                                return true;
+                            } else {
+                                return false;
+                            }
                         });
                 //if objectPoint is in LOS, generate noisyObjectPoint and after all objectPoints store it into noisyMap
                 if (noVehicleOccultation && noObstacleOccultation) {
@@ -147,91 +151,26 @@ SensorDetection RealisticFovSensor::detectObjects() const
                     Position newNoisyPosition(sensorOri.x.value() + xNewAngle + xNewRange, sensorOri.y.value() + yNewAngle + yNewRange);
                     visibleNoisyObjectPoints.push_back(newNoisyPosition);
 
-                    double xDist = newNoisyPosition.x.value() - sensorOri.x.value();
-                    double yDist = newNoisyPosition.y.value() - sensorOri.y.value();
-                    double relativeAng = atan2(yDist,xDist);
-
-                    std::cout << "Angle Error "<<angleError<<" "<< relativeAng*180/PI - relativeAngle*180/PI << ";\n";
-                    std::cout << "Range Error "<<rangeError<<" "<<sqrt(pow(xDist,2) + pow(yDist,2)) - sqrt(pow(xDistance,2) + pow(yDistance,2))<< ";\n\n";
-                }
-            } // for each (corner) point of object polygon
-            noisyMap.emplace(std::shared_ptr<EnvironmentModelObject>(object), visibleNoisyObjectPoints);//store NoisyOutline
-        } // for each object real LOS
-
-        //check if the generated noisy positions are in LOS of the sensor
-        for (auto& objectPair : noisyMap)
-        {
-            auto& object = objectPair.first;
-            auto& noisyObjectPoints = objectPair.second;
-            if (noisyObjectPoints.empty()) {
-                continue;
-            }
-
-            for (auto& noisyObjectPoint : noisyObjectPoints)
-            {
-                if (!bg::covered_by(noisyObjectPoint, detection.sensorCone)) {
-                    //noisyObjectPoints.erase(std::find(noisyObjectPoints.begin(), noisyObjectPoints.end(), noisyObjectPoint));//remove point if it moved outside of sensorcone
-                    continue;
-                }
-
-                LineOfSight lineOfNoisySight;
-                lineOfNoisySight[0] = detection.sensorOrigin;
-                lineOfNoisySight[1] = noisyObjectPoint;
-
-                bool noNoisyVehicleOccultation = std::none_of(preselObjectsInSensorRange.begin(), preselObjectsInSensorRange.end(),
-                        [&](const std::shared_ptr<EnvironmentModelObject>& objectLOS) {
-                            if (object->getExternalId()==objectLOS->getExternalId()) {//ignore if noisyObjectPoint is blocked from own object, already checked in previous for loop
-                                return false;
-                            }
-                            return bg::crosses(lineOfNoisySight, objectLOS->getOutline()); 
-                        });
-
-               /* bool noNoisyVehicleOccultation = std::none_of(noisyMap.begin(), noisyMap.end(),
-                    [&](const std::pair<std::shared_ptr<EnvironmentModelObject>, std::vector<Position>>& noisyPosition) {
-                        return bg::crosses(lineOfNoisySight, noisyPosition.second); 
-                    });*/
-
-                bool noNewObstacleOccultation = std::none_of(obstacleIntersections.begin(), obstacleIntersections.end(),
-                    [&](const std::shared_ptr<EnvironmentModelObstacle>& obstacle) {
-                        ASSERT(obstacle);
-                        if (bg::intersects(lineOfNoisySight, obstacle->getOutline())) {
-                            blockingObstacles.insert(obstacle);
-                            return true;
-                        } else {
-                            return false;
-                        }
-                    });
-                if (noNoisyVehicleOccultation && noNewObstacleOccultation) {//if noisy Position is in LOS, check for resolution
                     if (detection.objects.empty() || detection.objects.back() != object) {
                         detection.objects.push_back(object);
                     }
                     if (mDrawLinesOfSight) {
-                        detection.visiblePoints.push_back(noisyObjectPoint);
+                        detection.visiblePoints.push_back(newNoisyPosition);
                     }
-                    bool nodeExists = false;
-                    Node vertexNode;
-                    vertexNode.name = object->getExternalId();
-                    vertexNode.ptr = std::shared_ptr<EnvironmentModelObject>(object);
-                    boost::graph_traits <AdjList>::vertex_iterator start, end;
-                    for (boost::tie(start, end) = boost::vertices(graph); start != end; ++start) {
-                        if (vertexNode.name == graph[*start].name) {
-                            nodeExists = true;
-                            break;
-                        }
-                    }
-                    if (!nodeExists) {
-                        auto vertex_descript = boost::add_vertex(vertexNode,graph);//create vertex for every detected object
-                        graphPropertyMap.emplace(object->getExternalId(), vertex_descript);//store vertex_descriptor and object name
-                    }
-                } else { //if noisy Position is not in LOS, remove it from the NoisyOutline vector
-                    //noisyObjectPoints.erase(std::find(noisyObjectPoints.begin(), noisyObjectPoints.end(), noisyObjectPoint));
-                    continue;
                 }
-            }// for each (corner) point of object polygon   
-        }// for each object noisy LOS
+            } // for each (corner) point of object polygon
+            if (!visibleNoisyObjectPoints.empty()) {
+                noisyMap.emplace(std::shared_ptr<EnvironmentModelObject>(object), visibleNoisyObjectPoints);//store NoisyOutline
+                Node vertexNode;
+                vertexNode.objectPtr = std::shared_ptr<EnvironmentModelObject>(object);
+                auto vertex_descript = boost::add_vertex(vertexNode,graph);//create vertex for every detected object
+                graphPropertyMap.emplace(object->getExternalId(), vertex_descript);//store vertex_descriptor and object name
+            }
+        } // for each object real LOS
 
         //check if distance between each point is bigger than resolution, connect objects in graph if distance is too small
         //if other points are inside the resolution area, the point is removed
+        //graph: https://www.boost.org/doc/libs/1_78_0/libs/graph/example/incremental_components.cpp
         typedef boost::graph_traits<AdjList>::vertex_descriptor Vertex;
         typedef boost::graph_traits<AdjList>::vertices_size_type VertexIndex; 
         std::vector<VertexIndex> rank(num_vertices(graph));
@@ -249,9 +188,10 @@ SensorDetection RealisticFovSensor::detectObjects() const
             if (noisyObjectPoints.empty()) {
                 continue;
             }
-
-            for (auto& noisyObjectPoint : noisyObjectPoints) 
+            
+            for (auto loopIterator = noisyObjectPoints.begin(); loopIterator != noisyObjectPoints.end(); ++loopIterator) 
             {
+                auto& noisyObjectPoint = *loopIterator;
                 bool removePoint = false;
                 Position sensorOri = detection.sensorOrigin;
                 double xDistance = noisyObjectPoint.x.value() - sensorOri.x.value();
@@ -261,7 +201,7 @@ SensorDetection RealisticFovSensor::detectObjects() const
                 double xNewRangePos = xDistance + mFovConfig.fieldOfView.rangeResolution.value() * cos(relativeAngle);//transform matrix for range                double yNewRangePos = yDistance + mFovConfig.fieldOfView.rangeResolution.value() * sin(relativeAngle);
                 double xNewRangeNeg = xDistance - mFovConfig.fieldOfView.rangeResolution.value() * cos(relativeAngle);
                 double yNewRangeNeg = yDistance - mFovConfig.fieldOfView.rangeResolution.value() * sin(relativeAngle);
-                double yNewRangePos = yDistance - mFovConfig.fieldOfView.rangeResolution.value() * sin(relativeAngle);
+                double yNewRangePos = yDistance + mFovConfig.fieldOfView.rangeResolution.value() * sin(relativeAngle);
 
                 double angleResolutionRad = mFovConfig.fieldOfView.angleResolution.value()*PI/180.0;//convert degree to rad for sin/cos
                 double xNewAngleCounterClock = xDistance * cos(angleResolutionRad) - yDistance * sin(angleResolutionRad);//rotation matrix for angle
@@ -275,67 +215,61 @@ SensorDetection RealisticFovSensor::detectObjects() const
                 Position thirdPos(sensorOri.x.value() + xNewRangeNeg, sensorOri.y.value() + yNewRangeNeg);
                 Position fourthPos(sensorOri.x.value() + xNewAngleClock, sensorOri.y.value() + yNewAngleClock);
                 std::vector<Position> resolution = {firstPos, secondPos, thirdPos, fourthPos};//create box for resolution
-                double xDist = secondPos.x.value() - sensorOri.x.value();
-                double yDist = secondPos.y.value() - sensorOri.y.value();
-                double xDist2 = fourthPos.x.value() - sensorOri.x.value();
-                double yDist2 = fourthPos.y.value() - sensorOri.y.value();
-                double relativeAng = atan2(yDist,xDist);
-                double relativeAng2 = atan2(yDist2,xDist2);
-                std::cout <<"ResolutionAngle: "<< relativeAngle*180/PI-relativeAng*180/PI << " " << relativeAngle*180/PI-relativeAng2*180/PI << ";\n";
-                std::cout <<"ResolutionRange: " << sqrt(pow(noisyObjectPoint.x.value() - firstPos.x.value(),2) + pow(noisyObjectPoint.y.value() - firstPos.y.value(),2));
-                std::cout << " " << sqrt(pow(noisyObjectPoint.x.value() - thirdPos.x.value(),2) + pow(noisyObjectPoint.y.value() - thirdPos.y.value(),2)) << ";\n\n";
-                        
+                
+                detection.objectPointResolutions.push_back(resolution);//draws the frame around each objectPoint
+
                 bool selfCheck = false;
-                for (auto& selfObjectResolution : noisyObjectPoints) {
+                for (auto& selfObjectResolution : noisyObjectPoints) {//check if objectPoints of same object are near each other
                     if (selfCheck == false && selfObjectResolution == noisyObjectPoint) {
                         selfCheck = true;//if multiple points are on the exact same positions ignore first appearance
                         continue;
                     }
                     if (bg::within(selfObjectResolution, resolution)) {
-                        removePoint = true;
+                        //removePoint = true;//delete the current objectpoint
+                        break;
                     }
                 }
-
-                for (auto& objectResolutionMap : noisyMap)
+                for (auto& objectResolutionMap : noisyMap)//check if objectPoints are near other objects
                 {
                     auto& objectResolution = objectResolutionMap.first;
                     auto& objectResolutionNoisyOutline = objectResolutionMap.second;
                     if (objectResolution->getExternalId() != object->getExternalId() && bg::intersects(resolution, objectResolutionNoisyOutline)) {
                         auto object_vertex_decriptor = graphPropertyMap.find(object->getExternalId())->second;
                         auto objectResolution_vertex_descriptor = graphPropertyMap.find(objectResolution->getExternalId())->second;
-                        
                         boost::add_edge(object_vertex_decriptor, objectResolution_vertex_descriptor, graph);
                         ds.union_set(object_vertex_decriptor, objectResolution_vertex_descriptor);
-                        removePoint = true;
+                        //removePoint = true;//delete the current objectpoint
                     }
                 }
                 if (removePoint) {
-                    //noisyObjectPoints.erase(std::find(noisyObjectPoints.begin(), noisyObjectPoints.end(), noisyObjectPoint));
-                    //detection.visiblePoints.erase(std::find(detection.visiblePoints.begin(), detection.visiblePoints.end(), noisyObjectPoint)); 
+                    auto noisyObjectIterator = std::find(noisyObjectPoints.begin(), noisyObjectPoints.end(), noisyObjectPoint); 
+                    if (noisyObjectIterator != noisyObjectPoints.end()) {
+                        noisyObjectPoints.erase(noisyObjectIterator);
+                        //remove objectPoint from detection.visiblePoints, point not visible anymore (no LoS is drawn)
+                        auto detectionIterator = std::find(detection.visiblePoints.begin(), detection.visiblePoints.end(), noisyObjectPoint);
+                        if (detectionIterator != detection.visiblePoints.end()) {
+                            detection.visiblePoints.erase(detectionIterator); 
+                        }
+                        --loopIterator;//without decrements, the iterator will be out of vector range in the next loop or skip an element
+                    }
                 }
             }
         }
-        std::cout << ds.count_sets(boost::vertices(graph).first,boost::vertices(graph).second) << "\n";
         typedef boost::component_index< VertexIndex > Components;
         Components components(parent.begin(), parent.end());
-        // Iterate through the component indices
-        BOOST_FOREACH (VertexIndex current_index, components)
+        // Iterate through each disjoint set and access each set member (https://www.boost.org/doc/libs/1_78_0/libs/graph/example/incremental_components.cpp)
+        BOOST_FOREACH (VertexIndex disjointSet, components)
         {
-            std::cout << "component " << current_index << " contains: ";
-
-            // Iterate through the child vertex indices for [current_index]
             std::vector<std::shared_ptr<EnvironmentModelObject>> combinedObjects;
             std::vector<Position> visibleObjectPoints;
-            BOOST_FOREACH (VertexIndex child_index, components[current_index])
+            BOOST_FOREACH (VertexIndex disjointSetMember, components[disjointSet])
             {
-                std::string name = graph[child_index].name;
-                auto& ptr = graph[child_index].ptr;
+                auto& ptr = graph[disjointSetMember].objectPtr;
                 const auto& noisyObjectPoints = noisyMap.find(ptr)->second;
-                std::cout << name << " ";
                 combinedObjects.push_back(std::shared_ptr<EnvironmentModelObject>(ptr));
                 visibleObjectPoints.insert(visibleObjectPoints.end(), noisyObjectPoints.begin(), noisyObjectPoints.end());
             }
-            std::cout << std::endl;
+            //create objectWrapper for each disjoint set
             double centreX = 0, centreY = 0, newDimension1 = 0, newDimension2 = 0;
             measureDimensions(&visibleObjectPoints, &newDimension1, &newDimension2, &centreX, &centreY);
             Position newCentre(centreX,centreY);
@@ -604,23 +538,32 @@ void RealisticFovSensor::refreshDisplay() const
 
         for (const auto& object : mLastDetection->objects) {
             auto polygon = new cPolygonFigure(object->getExternalId().c_str());
-            polygon->setFilled(true);
+            polygon->setFilled(false);
             polygon->setFillColor(mColor);
             polygon->setLineColor(cFigure::RED);
-            for (auto& objectWrapper : mLastDetection->objectWrapper)//find noisyOutline from last detection of the object in an objectwrapper
-            {
-                for (auto& foundObject : objectWrapper->getObjects()) 
-                {
-                    if (object->getExternalId() == foundObject->getExternalId()) {
-                        for (const auto& position : objectWrapper->getNoisyOutline()) {
-                            polygon->addPoint(cFigure::Point { position.x.value(), position.y.value() });
-                        }
-                        mObjectsFigure->addFigure(polygon);
-                        break;
-                    }
-                }
+            for (const auto& position : object->getOutline()) {
+                polygon->addPoint(cFigure::Point { position.x.value(), position.y.value() });
             }
-            
+            mObjectsFigure->addFigure(polygon);          
+        }
+        for (auto& objectWrapper : mLastDetection->objectWrapper) {
+            auto polygon = new cPolygonFigure();
+            polygon->setFilled(true);
+            polygon->setFillColor(mColor);
+            polygon->setLineColor(cFigure::GREEN);
+            for (const auto& position : objectWrapper->getNoisyOutline()) {
+                polygon->addPoint(cFigure::Point { position.x.value(), position.y.value() });
+            }
+            mObjectsFigure->addFigure(polygon);
+        }
+        for (auto& resolution : mLastDetection->objectPointResolutions) {
+            auto polygon = new cPolygonFigure();
+            polygon->setFilled(false);
+            polygon->setLineColor(mColor);
+            for (const auto& position : resolution) {
+                polygon->addPoint(cFigure::Point { position.x.value(), position.y.value() });
+            }
+            mObjectsFigure->addFigure(polygon);
         }
     }
 }

@@ -70,8 +70,8 @@ void LocalEnvironmentModel::complementObjects(const SensorDetection& detection, 
     for (auto& detectedObject : detection.objects) {//check if objects are already tracked by a sensor
         auto foundObject = mObjects.find(detectedObject);
         std::shared_ptr<EnvironmentModelObjectWrapper> wrapperPointer = nullptr;
-        for (auto objectWr : detection.objectWrapper) {
-            for (auto objectWrPtr : objectWr->getObjects()) {
+        for (auto objectWr : detection.objectWrapper) {//find objectWrapper which contains the object
+            for (auto& objectWrPtr : objectWr->getObjects()) {
                 if (detectedObject == objectWrPtr) {
                     wrapperPointer = std::shared_ptr<EnvironmentModelObjectWrapper>(objectWr);
                     break;
@@ -80,15 +80,15 @@ void LocalEnvironmentModel::complementObjects(const SensorDetection& detection, 
             if (wrapperPointer != nullptr) {
                 break;
             }
-        }//TODO check if pointer could be null
+        }
         if (foundObject != mObjects.end()) {
             Tracking& tracking = foundObject->second;
             tracking.tap(&sensor);
-            if (sensor.isNoisy()) {//check if sensor is noisy
+            if (sensor.isNoisy() && wrapperPointer != nullptr) {//check if sensor is noisy and object is part of any wrapper
                 tracking.addObjectWrapper(&sensor, wrapperPointer);
             }
         } else {
-            if (sensor.isNoisy()) {//check if sensor is noisy
+            if (sensor.isNoisy() && wrapperPointer != nullptr) {//check if sensor is noisy and object is part of any wrapper
                 mObjects.emplace(detectedObject, Tracking { ++mTrackingCounter, &sensor, wrapperPointer});
             } else {
                 mObjects.emplace(detectedObject, Tracking { ++mTrackingCounter, &sensor });
