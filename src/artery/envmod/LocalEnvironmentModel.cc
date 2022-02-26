@@ -69,30 +69,23 @@ void LocalEnvironmentModel::complementObjects(const SensorDetection& detection, 
 {
     for (auto& detectedObject : detection.objects) {//check if objects are already tracked by a sensor
         auto foundObject = mObjects.find(detectedObject);
-        std::shared_ptr<EnvironmentModelObjectWrapper> wrapperPointer = nullptr;
-        for (auto objectWr : detection.objectWrapper) {//find objectWrapper which contains the object
-            for (auto& objectWrPtr : objectWr->getObjects()) {
-                if (detectedObject == objectWrPtr) {
-                    wrapperPointer = std::shared_ptr<EnvironmentModelObjectWrapper>(objectWr);
-                    break;
-                }
-            }
-            if (wrapperPointer != nullptr) {
-                break;
-            }
-        }
         if (foundObject != mObjects.end()) {
             Tracking& tracking = foundObject->second;
             tracking.tap(&sensor);
-            if (sensor.isNoisy() && wrapperPointer != nullptr) {//check if sensor is noisy and object is part of any wrapper
-                tracking.addObjectWrapper(&sensor, wrapperPointer);
-            }
         } else {
-            if (sensor.isNoisy() && wrapperPointer != nullptr) {//check if sensor is noisy and object is part of any wrapper
-                mObjects.emplace(detectedObject, Tracking { ++mTrackingCounter, &sensor, wrapperPointer});
-            } else {
-                mObjects.emplace(detectedObject, Tracking { ++mTrackingCounter, &sensor });
-            }
+            mObjects.emplace(detectedObject, Tracking { ++mTrackingCounter, &sensor });
+        }
+    }
+
+    for (auto& detectedObjectWrapper : detection.objectWrapper) {//check if objectWrappers are already tracked by a sensor, 
+        auto foundObject = mObjectWrapperMap.find(detectedObjectWrapper);
+        if (foundObject != mObjectWrapperMap.end()) {
+            Tracking tracking = foundObject->second;
+            tracking.tap(&sensor);
+            mObjectWrapperMap.erase(foundObject);
+            mObjectWrapperMap.emplace(detectedObjectWrapper, tracking);
+        } else {
+            mObjectWrapperMap.emplace(detectedObjectWrapper, Tracking { ++mTrackingCounter, &sensor });
         }
     }
 }
@@ -106,6 +99,18 @@ void LocalEnvironmentModel::update()
 
         if (object.expired() || tracking.expired()) {
             it = mObjects.erase(it);
+        } else {
+            ++it;
+        }
+    }
+
+    for (auto it = mObjectWrapperMap.begin(); it != mObjectWrapperMap.end();) {
+        const auto& object = it->first;
+        Tracking& tracking = it->second;
+        tracking.update();
+
+        if (tracking.expired()) {
+            it = mObjectWrapperMap.erase(it);
         } else {
             ++it;
         }
@@ -156,21 +161,6 @@ LocalEnvironmentModel::Tracking::Tracking(int id, const Sensor* sensor) : mId(id
     mSensors.emplace(sensor, TrackingTime {});
 }
 
-LocalEnvironmentModel::Tracking::Tracking(int id, const Sensor* sensor, std::shared_ptr<EnvironmentModelObjectWrapper> wrapperObject) : mId(id)
-{
-    mSensors.emplace(sensor, TrackingTime {});
-    mWrapperObject.emplace(sensor, wrapperObject);
-}
-
-void LocalEnvironmentModel::Tracking::addObjectWrapper(const Sensor* sensor, std::shared_ptr<EnvironmentModelObjectWrapper> wrapper)
-{
-    auto found = mWrapperObject.find(sensor);
-    if (found != mWrapperObject.end()) {
-        found->second = wrapper;
-    } else {
-        mWrapperObject.emplace(sensor, wrapper);
-    }
-}
 
 bool LocalEnvironmentModel::Tracking::expired() const
 {
@@ -186,10 +176,6 @@ void LocalEnvironmentModel::Tracking::update()
       const bool expired = tracking.last() + sensor->getValidityPeriod() < simTime();
       if (expired) {
             it = mSensors.erase(it);
-            auto foundWrapper = mWrapperObject.find(sensor);//if sensor entry also has wrapperObject stored, delete it
-            if (foundWrapper != mWrapperObject.end()) {
-                mWrapperObject.erase(foundWrapper);
-            }  
       } else {
           ++it;
       }
@@ -251,6 +237,10 @@ TrackedObjectsFilterRange filterBySensorName(const LocalEnvironmentModel::Tracke
     auto begin = boost::make_filter_iterator(seenByName, all.begin(), all.end());
     auto end = boost::make_filter_iterator(seenByName, all.end(), all.end());
     return boost::make_iterator_range(begin, end);
+}
+
+inline bool LocalEnvironmentModel::customLess::operator() (const std::shared_ptr<EnvironmentModelObjectWrapper>& lhs, const std::shared_ptr<EnvironmentModelObjectWrapper>& rhs) {
+    return *lhs<*rhs;
 }
 
 } // namespace artery

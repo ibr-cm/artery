@@ -17,12 +17,17 @@ moduleinterface RealisticFovSensor
 
         double angleAccuracy; //degree
         double rangeAccuracy @unit(m);
+        double velocityAccuracy @unit(mps);
         double angleResolution; //degree
         double rangeResolution @unit(m);
+        double velocityResolution @unit(mps);
+        double minimalDistance @unit(m);
 
         // visualization paramaters
         bool drawSensorCone; // draw sensor cone polygon
         bool drawBlockingObstacles; // draw outline of (static) obstacles blocking a line-of-sight
         bool drawDetectedObjects; // draw outline of (dynamic) detected objects
         bool drawLinesOfSight; // draw lines from ego to every visible corner of a vehicle
+        bool drawResolution; // draw box around every object point
+        bool drawObjectWrapper; // draw objectWrapper
 }

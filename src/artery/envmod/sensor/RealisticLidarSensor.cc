@@ -4,8 +4,8 @@
  * Licensed under GPLv2, see COPYING file for detailed license and warranty terms.
  */
 
-#include "artery/envmod/sensor/RealisticFovSensor.h"
-#include "artery/application/Middleware.h"
+#include "artery/envmod/sensor/RealisticLidarSensor.h"
+
 using namespace omnetpp;
 
 using LineOfSight = std::array<artery::Position, 2>;
@@ -16,65 +16,17 @@ BOOST_GEOMETRY_REGISTER_LINESTRING(LineOfSight)
 namespace artery
 {
 
-RealisticFovSensor::RealisticFovSensor() :
-    mGroupFigure(nullptr), mSensorConeFigure(nullptr), mLinesOfSightFigure(nullptr),
-    mObjectsFigure(nullptr), mObstaclesFigure(nullptr)
+Define_Module(RealisticLidarSensor);
+
+const std::string& RealisticLidarSensor::getSensorCategory() const
 {
+    static const std::string category = "Lidar";
+    return category;
 }
 
-void RealisticFovSensor::finish()
+SensorDetection RealisticLidarSensor::detectObjects() const
 {
-    if (mGroupFigure) {
-        delete mGroupFigure->removeFromParent();
-        mGroupFigure = nullptr;
-    }
-    BaseSensor::finish();
-}
 
-void RealisticFovSensor::initialize()
-{
-    BaseSensor::initialize();
-
-    std::string groupName = getEgoId();
-    if (groupName.empty()) {
-        const cModule* host = getMiddleware().getIdentity().host;
-        assert(host);
-        groupName += host->getName();
-    }
-    groupName += "-" + getSensorName();
-    mGroupFigure = new cGroupFigure(groupName.c_str());
-    mGlobalEnvironmentModel->getCanvas()->addFigure(mGroupFigure);
-    mColor = cFigure::GOOD_DARK_COLORS[getId() % cFigure::NUM_GOOD_DARK_COLORS];
-
-    mFovConfig.egoID = getEgoId();
-    mFovConfig.sensorID = getId();
-    mFovConfig.sensorPosition = determineSensorPosition(par("attachmentPoint"));
-
-    mFovConfig.fieldOfView.range = par("fovRange").doubleValue() * boost::units::si::meters;
-    mFovConfig.fieldOfView.angle = par("fovAngle").doubleValue() * boost::units::degree::degrees;
-    mFovConfig.fieldOfView.angleAccuracy = par("angleAccuracy").doubleValue() * boost::units::degree::degrees;
-    mFovConfig.fieldOfView.rangeAccuracy = par("rangeAccuracy").doubleValue() * boost::units::si::meters;
-    mFovConfig.fieldOfView.velocityAccuracy = par("velocityAccuracy").doubleValue() * boost::units::si::meters_per_second;
-    mFovConfig.fieldOfView.angleResolution = par("angleResolution").doubleValue() * boost::units::degree::degrees;
-    mFovConfig.fieldOfView.rangeResolution = par("rangeResolution").doubleValue() * boost::units::si::meters;
-    mFovConfig.fieldOfView.velocityResolution = par("velocityResolution").doubleValue() * boost::units::si::meters_per_second;
-    mFovConfig.fieldOfView.minimalDistance = par("minimalDistance").doubleValue() * boost::units::si::meters;
-    mFovConfig.numSegments = par("numSegments");
-    mFovConfig.doLineOfSightCheck = par("doLineOfSightCheck");
-
-    initializeVisualization();
-}
-
-void RealisticFovSensor::measurement()
-{
-    Enter_Method("measurement");
-    auto detection = detectObjects();
-    mLocalEnvironmentModel->complementObjects(detection, *this);
-    mLastDetection = std::move(detection);
-}
-
-SensorDetection RealisticFovSensor::detectObjects() const
-{
     namespace bg = boost::geometry;
     if (mFovConfig.fieldOfView.range <= 0.0 * boost::units::si::meter) {
         throw std::runtime_error("sensor range is 0 meter or less");
@@ -92,16 +44,22 @@ SensorDetection RealisticFovSensor::detectObjects() const
         auto graph = AdjList();
         std::map<std::string, boost::graph_traits<AdjList>::vertex_descriptor> graphPropertyMap;
         std::map<std::shared_ptr<EnvironmentModelObject>, std::vector<Position>> noisyMap;
-        std::map<std::shared_ptr<EnvironmentModelObject>, double> velocityMap;
         // check if objects in sensor cone are hidden by another object or an obstacle
         for (const auto& object : preselObjectsInSensorRange)
         {
             std::vector<Position> visibleNoisyObjectPoints;
-            std::vector<double> noisyVelocityList;
             for (auto objectPoint : object->getOutline())
             {
                 // skip objects points outside of sensor cone
                 if (!bg::covered_by(objectPoint, detection.sensorCone)) {
+                    continue;
+                }
+
+                // skip object points which are too close to sensor
+                double xdist = objectPoint.x.value() - detection.sensorOrigin.x.value();
+                double ydist = objectPoint.y.value() - detection.sensorOrigin.y.value();
+                double distance = sqrt(pow(xdist, 2)+pow(ydist, 2));
+                if (distance < mFovConfig.fieldOfView.minimalDistance.value()) {
                     continue;
                 }
 
@@ -131,9 +89,6 @@ SensorDetection RealisticFovSensor::detectObjects() const
                     double yDistance = objectPoint.y.value() - sensorOri.y.value();
                     double angleError = normal(0, mFovConfig.fieldOfView.angleAccuracy.value(), 2);//get random noise for sensor
                     double rangeError = normal(0, mFovConfig.fieldOfView.rangeAccuracy.value(), 2);
-                    double velocityError = normal(0, mFovConfig.fieldOfView.velocityAccuracy.value(), 2);
-
-                    double noisyVelocity = object->getVehicleData().speed().value() + velocityError;
                     
                     double relativeAngle = atan2(yDistance,xDistance);
                     double xNewRange = rangeError * cos(relativeAngle);//transform matrix for range
@@ -145,7 +100,6 @@ SensorDetection RealisticFovSensor::detectObjects() const
 
                     Position newNoisyPosition(sensorOri.x.value() + xNewAngle + xNewRange, sensorOri.y.value() + yNewAngle + yNewRange);
                     visibleNoisyObjectPoints.push_back(newNoisyPosition);
-                    noisyVelocityList.push_back(noisyVelocity);
 
                     if (detection.objects.empty() || detection.objects.back() != object) {
                         detection.objects.push_back(object);
@@ -156,12 +110,6 @@ SensorDetection RealisticFovSensor::detectObjects() const
                 }
             } // for each (corner) point of object polygon
             if (!visibleNoisyObjectPoints.empty()) {
-                double sum = 0;
-                for (double velocityEntry : noisyVelocityList) {
-                    sum += velocityEntry;
-                }
-                double averageNoisyVelocity = sum/noisyVelocityList.size();//calculate average velocity for object
-                velocityMap.emplace(std::shared_ptr<EnvironmentModelObject>(object), averageNoisyVelocity);//store noisy velocities for each object point
                 noisyMap.emplace(std::shared_ptr<EnvironmentModelObject>(object), visibleNoisyObjectPoints);//store NoisyOutline
                 Node vertexNode;
                 vertexNode.objectPtr = std::shared_ptr<EnvironmentModelObject>(object);
@@ -198,7 +146,7 @@ SensorDetection RealisticFovSensor::detectObjects() const
                 Position sensorOri = detection.sensorOrigin;
                 double xDistance = noisyObjectPoint.x.value() - sensorOri.x.value();
                 double yDistance = noisyObjectPoint.y.value() - sensorOri.y.value();
-
+                
                 double relativeAngle = atan2(yDistance,xDistance);
                 double xNewRangePos = xDistance + mFovConfig.fieldOfView.rangeResolution.value() * cos(relativeAngle);//transform matrix for range                double yNewRangePos = yDistance + mFovConfig.fieldOfView.rangeResolution.value() * sin(relativeAngle);
                 double xNewRangeNeg = xDistance - mFovConfig.fieldOfView.rangeResolution.value() * cos(relativeAngle);
@@ -231,22 +179,16 @@ SensorDetection RealisticFovSensor::detectObjects() const
                         break;
                     }
                 }
-                const auto& objectVelocity = velocityMap.find(object);
                 for (auto& objectResolutionMap : noisyMap)//check if objectPoints are near other objects
                 {
                     auto& objectResolution = objectResolutionMap.first;
                     if (objectResolution->getExternalId() == object->getExternalId()) {//only check different vehicles
                         continue;
                     }
-                    
-                    const auto& velocityMapPair = velocityMap.find(objectResolution);
-                    bool upperLimit = objectVelocity->second + mFovConfig.fieldOfView.velocityResolution.value() < velocityMapPair->second;
-                    bool lowerLimit = objectVelocity->second - mFovConfig.fieldOfView.velocityResolution.value() > velocityMapPair->second;
-                    bool outsideVelocityResolution = upperLimit || lowerLimit;//check if velocity of both objects is distingushable
 
                     auto& objectResolutionNoisyOutline = objectResolutionMap.second;
 
-                    if (!(outsideVelocityResolution) && bg::intersects(resolution, objectResolutionNoisyOutline)) {
+                    if (bg::intersects(resolution, objectResolutionNoisyOutline)) {
                         auto object_vertex_decriptor = graphPropertyMap.find(object->getExternalId())->second;
                         auto objectResolution_vertex_descriptor = graphPropertyMap.find(objectResolution->getExternalId())->second;
                         boost::add_edge(object_vertex_decriptor, objectResolution_vertex_descriptor, graph);
@@ -274,8 +216,6 @@ SensorDetection RealisticFovSensor::detectObjects() const
         {
             std::vector<std::shared_ptr<EnvironmentModelObject>> combinedObjects;
             std::vector<Position> visibleObjectPoints;
-            double sum = 0;
-            int size = 0;
             BOOST_FOREACH (VertexIndex disjointSetMember, components[disjointSet])
             {
                 auto& ptr = graph[disjointSetMember].objectPtr;
@@ -283,18 +223,13 @@ SensorDetection RealisticFovSensor::detectObjects() const
                 if (noisyObjectPointsMapEntry != noisyMap.end()) {
                     const auto& noisyObjectPoints = noisyObjectPointsMapEntry->second;
                     if (!noisyObjectPoints.empty()) {
-                        sum += velocityMap.find(ptr)->second;
-                        size++;
                         combinedObjects.push_back(std::shared_ptr<EnvironmentModelObject>(ptr));
                         visibleObjectPoints.insert(visibleObjectPoints.end(), noisyObjectPoints.begin(), noisyObjectPoints.end());
                     }
                 }
             }
-            if (size == 0) {
-                size = 1;
-            }
-            //create objectWrapper for each disjoint set
-            boost::units::quantity<boost::units::si::velocity> averageVelocity = (sum/size) * boost::units::si::meters_per_second;
+            //create objectWrapper for each disjoint set 
+            boost::units::quantity<boost::units::si::velocity> averageVelocity = DBL_MAX * boost::units::si::meters_per_second;
             double centreX = 0, centreY = 0, newDimension1 = 0, newDimension2 = 0;
             measureDimensions(&visibleObjectPoints, &newDimension1, &newDimension2, &centreX, &centreY);
             Position newCentre(centreX,centreY);
@@ -310,7 +245,6 @@ SensorDetection RealisticFovSensor::detectObjects() const
             // only creates noisy Positions, does not check resolution
             std::vector<Position> visibleNoisyObjectPoints;
             if (bg::intersects(object->getOutline(), detection.sensorCone)) {
-                std::vector<double> noisyVelocityList;
                 for (const auto& objectPoint : object->getOutline()) 
                 {
                     Position sensorOri = detection.sensorOrigin;
@@ -318,9 +252,6 @@ SensorDetection RealisticFovSensor::detectObjects() const
                     double yDistance = objectPoint.y.value() - sensorOri.y.value();
                     double angleError = normal(0, mFovConfig.fieldOfView.angleAccuracy.value(), 2);//get random noise for sensor
                     double rangeError = normal(0, mFovConfig.fieldOfView.rangeAccuracy.value(), 2);
-                    double velocityError = normal(0, mFovConfig.fieldOfView.velocityAccuracy.value(), 2);
-
-                    double noisyVelocity = object->getVehicleData().speed().value() + velocityError;
 
                     double relativeAngle = atan2(yDistance,xDistance);
                     double xNewRange = rangeError * cos(relativeAngle);//transform matrix for range
@@ -331,13 +262,8 @@ SensorDetection RealisticFovSensor::detectObjects() const
                     double yNewAngle = xDistance * sin(angleErrorRad) + yDistance * cos(angleErrorRad);
                     Position newNoisyPosition(sensorOri.x.value() + xNewAngle + xNewRange, sensorOri.y.value() + yNewAngle + yNewRange);
                     visibleNoisyObjectPoints.push_back(newNoisyPosition);
-                    noisyVelocityList.push_back(noisyVelocity);
                 }
-                double sum = 0;
-                for (double noisyVelocity : noisyVelocityList) {
-                    sum += noisyVelocity;
-                }
-                boost::units::quantity<boost::units::si::velocity>  avgVelocity = (sum/noisyVelocityList.size()) * boost::units::si::meters_per_second;
+                boost::units::quantity<boost::units::si::velocity>  avgVelocity = DBL_MAX * boost::units::si::meters_per_second;
                 std::vector<std::shared_ptr<EnvironmentModelObject>> objectWrapper;
                 objectWrapper.emplace_back(std::shared_ptr<EnvironmentModelObject>(object));
                 detection.objectWrapper.emplace_back(std::make_shared<EnvironmentModelObjectWrapper>(objectWrapper, visibleNoisyObjectPoints, object->getWidth(), object->getLength(), object->getCentrePoint(), avgVelocity));
@@ -347,267 +273,6 @@ SensorDetection RealisticFovSensor::detectObjects() const
     }
 
     return detection;
-}
-//dimension1 was width, dimension2 was length
-void RealisticFovSensor::measureDimensions(std::vector<Position> *visibleObjectPoints, double *dimension1, double *dimension2, double *centreX, double *centreY) const
-{
-    switch (visibleObjectPoints->size()) {
-        case 0:
-        case 1://no information about vehicle with just one objectPoint
-        {
-            *dimension1 = 0;
-            *dimension2 = 0;
-            *centreX = 0;
-            *centreY = 0;
-            break;
-        }
-        case 2: //determine whether two objectpoints are width or length of vehicle
-        {
-            double xdist = visibleObjectPoints->at(0).x.value() - visibleObjectPoints->at(1).x.value();
-            double ydist = visibleObjectPoints->at(0).y.value() - visibleObjectPoints->at(1).y.value();
-            double distance = sqrt(pow(xdist, 2)+pow(ydist, 2));
-            if (distance < 2.2) {//real length of all simulated cars is 2.5, width is 1.8
-                *dimension1 = distance;
-                *dimension2 = 0;
-            } else {
-                *dimension2 = distance;
-                *dimension1 = 0;
-            }
-            /*boost::geometry::model::d2::point_xy<double> lineCentre;; //the centre is not between the 2 corners
-            boost::geometry::centroid(*visibleObjectPoints, lineCentre);
-            *centreX = centroid[0]; // visibleObjectPoints->at(1).x.value() + (0.5*xdist);
-            *centreY = centroid[1];*/ //visibleObjectPoints->at(1).y.value() + (0.5*ydist);
-            *centreX = 0;
-            *centreY = 0;
-            break;
-        }
-        case 3://with 3 objectpoints, one distance is the diagonal line of the car. This line is longer than the actual length or width of the car
-        {
-            double maxDistance = 0.0, xdiagonal, ydiagonal;
-            int diagonalStartIndex;
-            for (int i = 0; i < visibleObjectPoints->size(); i++) {
-                int j = i + 1;
-                if (j == 3) {
-                    j = 0;
-                }
-                double xdist = visibleObjectPoints->at(i).x.value() - visibleObjectPoints->at(j).x.value();
-                double ydist = visibleObjectPoints->at(i).y.value() - visibleObjectPoints->at(j).y.value();
-                double distance = sqrt(pow(xdist, 2)+pow(ydist, 2));
-                if (distance > maxDistance) {
-                    *dimension2 = maxDistance;
-                    maxDistance = distance;
-                    xdiagonal = xdist;
-                    ydiagonal = ydist;
-                    diagonalStartIndex = j;
-                }
-                if (distance < *dimension1 || *dimension1 == 0) {
-                    *dimension1 = distance;
-                }
-                if (distance != maxDistance && distance > *dimension2) {
-                    *dimension2 = distance;
-                }
-            }
-            *centreX = visibleObjectPoints->at(diagonalStartIndex).x.value()+0.5*xdiagonal;
-            *centreY = visibleObjectPoints->at(diagonalStartIndex).y.value()+0.5*ydiagonal;
-            break;
-        }
-        default://with 4 or more objecpoints two cars could be mixed together so no clear rectangle can be drawn -> estimation
-        {
-            std::vector<Position> hull;
-            boost::geometry::model::d2::point_xy<double> hullCentre;
-            boost::geometry::convex_hull(*visibleObjectPoints, hull);//alternatively use envelope function for a "bounding box"
-            boost::geometry::centroid(hull, hullCentre);//TODO: centroid exception
-            visibleObjectPoints->clear();
-            visibleObjectPoints->insert(visibleObjectPoints->end(), hull.begin(), hull.end());
-            *centreX = hullCentre.x();
-            *centreY = hullCentre.y();
-            *dimension1 = 0;
-            *dimension2 = 0;
-            break;
-        }
-    }
-}
-
-SensorDetection RealisticFovSensor::createSensorCone() const
-{
-    SensorDetection detection;
-    const auto& egoObj = mGlobalEnvironmentModel->getObject(mFovConfig.egoID);
-    if (egoObj) {
-        detection.sensorOrigin = egoObj->getAttachmentPoint(mFovConfig.sensorPosition);
-        detection.sensorCone = createSensorArc(mFovConfig, *egoObj);
-    } else {
-        throw std::runtime_error("no object found for ID " + mFovConfig.egoID);
-    }
-    return detection;
-}
-
-void RealisticFovSensor::initializeVisualization()
-{
-    assert(mGroupFigure);
-    mDrawLinesOfSight = par("drawLinesOfSight");
-    mDrawObjectWrapper = par("drawObjectWrapper");
-    mDrawResolution = par("drawResolution");
-    bool drawSensorCone = par("drawSensorCone");
-    bool drawObjects = par("drawDetectedObjects");
-    bool drawObstacles = par("drawBlockingObstacles");
-
-    if (drawSensorCone && !mSensorConeFigure) {
-        mSensorConeFigure = new cPolygonFigure("sensor cone");
-        mSensorConeFigure->setLineColor(mColor);
-        mGroupFigure->addFigure(mSensorConeFigure);
-    } else if (!drawSensorCone && mSensorConeFigure) {
-        delete mSensorConeFigure->removeFromParent();
-        mSensorConeFigure = nullptr;
-    }
-
-    if(mDrawLinesOfSight && !mLinesOfSightFigure) {
-        mLinesOfSightFigure = new cGroupFigure("lines of sight");
-        mGroupFigure->addFigure(mLinesOfSightFigure);
-    } else if (!mDrawLinesOfSight && mLinesOfSightFigure) {
-        delete mLinesOfSightFigure->removeFromParent();
-        mLinesOfSightFigure = nullptr;
-    }
-
-    if (drawObstacles && !mObstaclesFigure) {
-        mObstaclesFigure = new cGroupFigure("obstacles");
-        mGroupFigure->addFigure(mObstaclesFigure);
-    } else if (!drawObstacles && mObstaclesFigure) {
-        delete mObstaclesFigure->removeFromParent();
-        mObstaclesFigure = nullptr;
-    }
-
-    if (drawObjects && !mObjectsFigure) {
-        mObjectsFigure = new cGroupFigure("objects");
-        mGroupFigure->addFigure(mObjectsFigure);
-    } else if (!drawObjects && mObjectsFigure) {
-        delete mObjectsFigure->removeFromParent();
-        mObjectsFigure = nullptr;
-    }
-}
-
-const FieldOfView& RealisticFovSensor::getFieldOfView() const
-{
-    return mFovConfig.fieldOfView;
-}
-
-omnetpp::SimTime RealisticFovSensor::getValidityPeriod() const
-{
-    using namespace omnetpp;
-    return SimTime { 200, SIMTIME_MS };
-}
-
-SensorPosition RealisticFovSensor::position() const
-{
-    return mFovConfig.sensorPosition;
-}
-
-const std::string& RealisticFovSensor::getSensorCategory() const
-{
-    static const std::string category = "RealisticFoV";
-    return category;
-}
-
-const std::string RealisticFovSensor::getSensorName() const
-{
-    return mFovConfig.sensorName;
-}
-
-void RealisticFovSensor::setSensorName(const std::string& name)
-{
-    mFovConfig.sensorName = name;
-}
-
-void RealisticFovSensor::refreshDisplay() const
-{
-    if (!mLastDetection) {
-        return;
-    }
-
-    if (mSensorConeFigure) {
-        std::vector<cFigure::Point> points;
-        for (const auto& position : mLastDetection->sensorCone) {
-            points.push_back(cFigure::Point { position.x.value(), position.y.value() });
-        }
-        mSensorConeFigure->setPoints(points);
-    }
-
-    if (mLinesOfSightFigure) {
-        // remove previous lines
-        while (mLinesOfSightFigure->getNumFigures() > 0) {
-            delete mLinesOfSightFigure->removeFigure(0);
-        }
-
-        const Position& startPoint = mLastDetection->sensorCone.front();
-
-        for (const Position& endPoint : mLastDetection->visiblePoints) {
-            auto line = new cLineFigure();
-            line->setLineColor(mColor);
-            line->setLineStyle(cFigure::LINE_DASHED);
-            line->setStart(cFigure::Point { startPoint.x.value(), startPoint.y.value() });
-            line->setEnd(cFigure::Point { endPoint.x.value(), endPoint.y.value() });
-            mLinesOfSightFigure->addFigure(line);
-        }
-    }
-
-    if (mObstaclesFigure) {
-        // remove previous obstacles
-        while (mObstaclesFigure->getNumFigures() > 0) {
-            delete mObstaclesFigure->removeFigure(0);
-        }
-
-        for (const auto& obstacle : mLastDetection->obstacles) {
-            auto polygon = new cPolygonFigure(obstacle->getObstacleId().c_str());
-            polygon->setFilled(true);
-            polygon->setFillColor(mColor);
-            polygon->setLineColor(cFigure::BLUE);
-            for (const auto& position : obstacle->getOutline()) {
-                polygon->addPoint(cFigure::Point { position.x.value(), position.y.value() });
-            }
-            mObstaclesFigure->addFigure(polygon);
-        }
-    }
-
-    if (mObjectsFigure) {
-        // remove previous objects
-        while (mObjectsFigure->getNumFigures() > 0) {
-            delete mObjectsFigure->removeFigure(0);
-        }
-
-        for (const auto& object : mLastDetection->objects) {
-            auto polygon = new cPolygonFigure(object->getExternalId().c_str());
-            polygon->setFilled(false);
-            polygon->setFillColor(mColor);
-            polygon->setLineColor(cFigure::RED);
-            for (const auto& position : object->getOutline()) {
-                polygon->addPoint(cFigure::Point { position.x.value(), position.y.value() });
-            }
-            mObjectsFigure->addFigure(polygon);          
-        }
-        if (mDrawObjectWrapper) {
-            for (auto& objectWrapper : mLastDetection->objectWrapper) {
-                auto polygon = new cPolygonFigure();
-                polygon->setFilled(true);
-                polygon->setFillColor(mColor);
-                polygon->setLineColor(cFigure::GREEN);
-                for (const auto& position : objectWrapper->getNoisyOutline()) {
-                    polygon->addPoint(cFigure::Point { position.x.value(), position.y.value() });
-                }
-                mObjectsFigure->addFigure(polygon);
-            }
-        }
-
-        if (mDrawResolution) {
-            for (auto& resolution : mLastDetection->objectPointResolutions) {
-                auto polygon = new cPolygonFigure();
-                polygon->setFilled(false);
-                polygon->setLineColor(mColor);
-                for (const auto& position : resolution) {
-                    polygon->addPoint(cFigure::Point { position.x.value(), position.y.value() });
-                }
-                mObjectsFigure->addFigure(polygon);
-            }
-        }
-    }
 }
 
 } // namespace artery

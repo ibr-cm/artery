@@ -6,7 +6,7 @@
 
 package artery.envmod.sensor;
 
-simple RealisticRadarSensor like RealisticFovSensor
+simple RealisticLidarSensor like RealisticFovSensor
 {
     parameters:
         double fovRange @unit(m) = default(80.0 m);

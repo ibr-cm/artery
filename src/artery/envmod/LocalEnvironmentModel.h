@@ -58,20 +58,15 @@ public:
     public:
         using TrackingMap = std::map<const Sensor*, TrackingTime>;
 
-        using ObjectMap = std::map<const Sensor*, std::shared_ptr<EnvironmentModelObjectWrapper>>;
-
-        Tracking(int id, const Sensor* sensor, std::shared_ptr<EnvironmentModelObjectWrapper> wrapperObject);
         Tracking(int id, const Sensor* sensor);
 
         bool expired() const;
         void update();
         void tap(const Sensor*);
-        void addObjectWrapper(const Sensor* sensor, std::shared_ptr<EnvironmentModelObjectWrapper> wrapper);
 
         int id() const { return mId; }
         const TrackingMap& sensors() const { return mSensors; }
 
-        ObjectMap mWrapperObject;
     private:
         int mId;
         TrackingMap mSensors;
@@ -80,7 +75,12 @@ public:
 
     using TrackedObjects = std::map<Object, Tracking, std::owner_less<Object>>;
     using TrackedObject = typename TrackedObjects::value_type;
-
+    struct customLess {
+        bool operator() (const std::shared_ptr<EnvironmentModelObjectWrapper>& lhs, const std::shared_ptr<EnvironmentModelObjectWrapper>& rhs);
+    };
+    using ObjectWrapperMap = std::map<std::shared_ptr<EnvironmentModelObjectWrapper>, Tracking, customLess>;
+    
+    //std::owner_less<std::shared_ptr<EnvironmentModelObjectWrapper>>>;
 
     LocalEnvironmentModel();
     virtual ~LocalEnvironmentModel() = default;
@@ -125,6 +125,7 @@ private:
     int mTrackingCounter = 0;
     TrackedObjects mObjects;
     std::vector<Sensor*> mSensors;
+    ObjectWrapperMap mObjectWrapperMap;
 };
 
 using TrackedObjectsFilterPredicate = std::function<bool(const LocalEnvironmentModel::TrackedObject&)>;

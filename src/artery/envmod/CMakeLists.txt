@@ -10,6 +10,7 @@ add_artery_feature(envmod
     sensor/RadarSensor.cc
     sensor/RealisticFovSensor.cc
     sensor/RealisticRadarSensor.cc
+    sensor/RealisticLidarSensor.cc
     sensor/RsuFovSensor.cc
     sensor/RsuRadarSensor.cc
     sensor/RsuSeeThroughSensor.cc

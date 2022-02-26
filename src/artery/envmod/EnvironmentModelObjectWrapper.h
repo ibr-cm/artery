@@ -23,9 +23,10 @@ class EnvironmentModelObjectWrapper
 {
 public:
     using Length = traci::VehicleType::Length;
+    using Velocity = traci::VehicleType::Velocity;
 
     //lengthDimension1 was width, lengthDimension2 was length of an object
-    EnvironmentModelObjectWrapper(std::vector<std::shared_ptr<EnvironmentModelObject>> objectList, std::vector<Position> noisyPos, Length dimension1, Length dimension2, Position centre);
+    EnvironmentModelObjectWrapper(std::vector<std::shared_ptr<EnvironmentModelObject>> objectList, std::vector<Position> noisyPos, Length dimension1, Length dimension2, Position centre, Velocity velocity);
     /**
      * Returns all EnvironmentModelObjects describing the wrapper object
      * @return vector of all included EnvironmentModelObjects
@@ -48,6 +49,7 @@ public:
 
     Length getDimension1() const { return mDimension1; }
 
+    Velocity getVelocity() const { return mVelocity; }
     /**
      * Return outer object radius
      *
@@ -59,11 +61,38 @@ public:
 private:
     traci::VehicleType::Length mDimension2;//length
     traci::VehicleType::Length mDimension1;//width
-    //traci::VehicleType::Length mRadius;
+    traci::VehicleType::Velocity mVelocity;
     std::vector<Position> mNoisyOutline;
     std::vector<std::shared_ptr<EnvironmentModelObject>> mObjects;
     Position mCentrePoint;
 };
 
+    inline bool operator<(const EnvironmentModelObjectWrapper& left, const EnvironmentModelObjectWrapper& right) {
+        /*const auto& lCentre = left.getCentrePoint();
+        const auto& rCentre = right.getCentrePoint();
+        if (lCentre.x < rCentre.x) {
+            return true;
+        } else if (lCentre.x == rCentre.x && lCentre.y < rCentre.y) {
+            return true;
+        } else if (lCentre.x == 0 && lCentre.y == 0 && rCentre.x == 0 && rCentre.y == 0){
+            return true;
+        } else {
+            return false;   
+        }*/
+        
+        if (left.getObjects().size() < right.getObjects().size()) {
+            return true;
+        } else if (left.getObjects().size() == right.getObjects().size()) {
+            int i = 0;
+            for (auto& lObj : left.getObjects()) {
+                if (lObj->getExternalId() < right.getObjects().at(i)->getExternalId())
+                    return true;
+                i++;
+            }
+            return false;
+        } else {
+            return false;
+        }
+    }
 } // namespace artery
 

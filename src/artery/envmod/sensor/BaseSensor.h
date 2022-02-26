@@ -31,7 +31,6 @@ protected:
     const Middleware& getMiddleware() const;
     std::string getEgoId();
     cModule* findHost();
-    bool isNoisy() const override { return false;};
     
     LocalEnvironmentModel* mLocalEnvironmentModel;
     GlobalEnvironmentModel* mGlobalEnvironmentModel;

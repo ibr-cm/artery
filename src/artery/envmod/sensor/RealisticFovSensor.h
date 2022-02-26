@@ -13,6 +13,15 @@
 #include <omnetpp/ccanvas.h>
 #include <memory>
 #include <functional>
+#include <boost/geometry/geometries/point_xy.hpp>
+#include <boost/geometry/geometries/register/linestring.hpp>
+#include <boost/graph/adjacency_list.hpp>
+#include <boost/foreach.hpp>
+#include <boost/pending/disjoint_sets.hpp>
+#include <boost/graph/incremental_components.hpp>
+#include <boost/graph/graph_utility.hpp>
+#include "artery/envmod/LocalEnvironmentModel.h"
+#include "artery/envmod/GlobalEnvironmentModel.h"
 
 namespace artery
 {
@@ -29,8 +38,7 @@ public:
     const std::string& getSensorCategory() const override;
     const std::string getSensorName() const override;
     void setSensorName(const std::string& name) override;
-    SensorDetection detectObjects() const override;
-
+    virtual SensorDetection detectObjects() const override;
 protected:
     template<typename T>
     class Updatable
@@ -53,12 +61,13 @@ protected:
     virtual SensorDetection createSensorCone() const;
 
     void measureDimensions(std::vector<Position> *visiblePositions, double *width, double *length, double *centreX, double *centreY) const;
-    bool isNoisy() const override { return true;};
 
     SensorConfigFov mFovConfig;
     Updatable<SensorDetection> mLastDetection;
     bool mDrawLinesOfSight;
-    
+    bool mDrawResolution;
+    bool mDrawObjectWrapper;
+
 private:
     omnetpp::cFigure::Color mColor;
     omnetpp::cGroupFigure* mGroupFigure;
