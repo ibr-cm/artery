@@ -12,6 +12,8 @@ using LineOfSight = std::array<artery::Position, 2>;
 struct Node {std::shared_ptr<artery::EnvironmentModelObject> objectPtr;};
 using AdjList = boost::adjacency_list<boost::vecS, boost::vecS, boost::undirectedS, Node>;
 BOOST_GEOMETRY_REGISTER_LINESTRING(LineOfSight)
+static const simsignal_t FovRangeErrSignal = cComponent::registerSignal("RealisticFovSensorRangErr");
+static const simsignal_t FovErasedPointsSignal = cComponent::registerSignal("RealisticFovSensorErasedPoints");
 
 namespace artery
 {
@@ -24,7 +26,7 @@ const std::string& RealisticLidarSensor::getSensorCategory() const
     return category;
 }
 
-SensorDetection RealisticLidarSensor::detectObjects() const
+SensorDetection RealisticLidarSensor::detectObjects() 
 {
 
     namespace bg = boost::geometry;
@@ -87,18 +89,27 @@ SensorDetection RealisticLidarSensor::detectObjects() const
                     Position sensorOri = detection.sensorOrigin;
                     double xDistance = objectPoint.x.value() - sensorOri.x.value();
                     double yDistance = objectPoint.y.value() - sensorOri.y.value();
-                    double angleError = normal(0, mFovConfig.fieldOfView.angleAccuracy.value(), 2);//get random noise for sensor
-                    double rangeError = normal(0, mFovConfig.fieldOfView.rangeAccuracy.value(), 2);
-                    
+                    double rangeError = normal(0, mFovConfig.fieldOfView.rangeAccuracy.value(), 2);//get random noise for sensor
+
+                    emit(FovRangeErrSignal, rangeError);
+
                     double relativeAngle = atan2(yDistance,xDistance);
                     double xNewRange = rangeError * cos(relativeAngle);//transform matrix for range
                     double yNewRange = rangeError * sin(relativeAngle);
-                
-                    double angleErrorRad = angleError*PI/180.0;//convert degree to rad for sin/cos
-                    double xNewAngle = xDistance * cos(angleErrorRad) - yDistance * sin(angleErrorRad);//rotation matrix for angle
-                    double yNewAngle = xDistance * sin(angleErrorRad) + yDistance * cos(angleErrorRad);
 
-                    Position newNoisyPosition(sensorOri.x.value() + xNewAngle + xNewRange, sensorOri.y.value() + yNewAngle + yNewRange);
+                    double xRoundedAngle = 0.0;
+                    double yRoundedAngle = 0.0;
+                    if (mFovConfig.fieldOfView.angleResolution.value() == 0) {
+                        xRoundedAngle = xDistance;
+                        yRoundedAngle = yDistance;
+                    } else {
+                        double relativeAngle = atan2(yDistance+yNewRange,xDistance+xNewRange);
+                        double angleResolutionRad = mFovConfig.fieldOfView.angleResolution.value()*PI/180.0;
+                        double rounded = std::fmod(relativeAngle, angleResolutionRad);
+                        xRoundedAngle = (xDistance+xNewRange) * cos(rounded) + (yDistance+yNewRange) * sin(rounded);//rotation matrix for angle
+                        yRoundedAngle = -(xDistance+xNewRange) * sin(rounded) + (yDistance+yNewRange) * cos(rounded);
+                    }
+                    Position newNoisyPosition(sensorOri.x.value() + xRoundedAngle, sensorOri.y.value() + yRoundedAngle);
                     visibleNoisyObjectPoints.push_back(newNoisyPosition);
 
                     if (detection.objects.empty() || detection.objects.back() != object) {
@@ -117,7 +128,52 @@ SensorDetection RealisticLidarSensor::detectObjects() const
                 graphPropertyMap.emplace(object->getExternalId(), vertex_descript);//store vertex_descriptor and object name
             }
         } // for each object real LOS
+        int removedPoints = 0;
+        for(auto& objectPair : noisyMap)//if two objectpoints are on the same angle lidar only detects closest point
+        {
+            auto& object = objectPair.first;
+            auto& noisyObjectPoints = objectPair.second;
+            for (auto loopIterator = noisyObjectPoints.begin(); loopIterator != noisyObjectPoints.end(); ++loopIterator) {
+                auto& noisyObjectPoint = *loopIterator;
+                LineOfSight lineOfSight;
+                lineOfSight[0] = detection.sensorOrigin;
+                lineOfSight[1] = noisyObjectPoint;
+                bool noVehicleOccultation = std::none_of(noisyMap.begin(), noisyMap.end(),
+                        [&](const std::pair<std::shared_ptr<EnvironmentModelObject>, std::vector<artery::Position>>& objectNoisyMap) {
+                            for (auto& otherOutlinePoint : objectNoisyMap.second) {//check if another point on same beam blocks line of sight
+                                if (noisyObjectPoint != otherOutlinePoint && bg::distance(otherOutlinePoint, lineOfSight)<0.00001) {
+                                    return true;
+                                }
+                            }
+                            return false;
+                        });
 
+                bool noObstacleOccultation = std::none_of(obstacleIntersections.begin(), obstacleIntersections.end(),
+                        [&](const std::shared_ptr<EnvironmentModelObstacle>& obstacle) {
+                            ASSERT(obstacle);
+                            if (bg::intersects(lineOfSight, obstacle->getOutline())) {
+                                blockingObstacles.insert(obstacle);
+                                return true;
+                            } else {
+                                return false;
+                            }
+                        });
+
+                if (!noObstacleOccultation || !noVehicleOccultation) {
+                    auto noisyObjectIterator = std::find(noisyObjectPoints.begin(), noisyObjectPoints.end(), noisyObjectPoint);
+                    auto detectionIterator = std::find(detection.visiblePoints.begin(), detection.visiblePoints.end(), noisyObjectPoint);
+                    if (noisyObjectIterator != noisyObjectPoints.end()) {
+                        removedPoints++;
+                        noisyObjectPoints.erase(noisyObjectIterator);
+                        if (detectionIterator != detection.visiblePoints.end()) {
+                            detection.visiblePoints.erase(detectionIterator); 
+                        }
+                        --loopIterator;//without decrements, the iterator will be out of vector range in the next loop or skip an element
+                    }
+                }
+            }
+        }
+        emit(FovErasedPointsSignal, removedPoints);
         //check if distance between each point is bigger than resolution, connect objects in graph if distance is too small
         //if other points are inside the resolution area, the point is removed
         //graph: https://www.boost.org/doc/libs/1_78_0/libs/graph/example/incremental_components.cpp
@@ -142,16 +198,9 @@ SensorDetection RealisticLidarSensor::detectObjects() const
             for (auto loopIterator = noisyObjectPoints.begin(); loopIterator != noisyObjectPoints.end(); ++loopIterator) 
             {
                 auto& noisyObjectPoint = *loopIterator;
-                bool removePoint = false;
                 Position sensorOri = detection.sensorOrigin;
                 double xDistance = noisyObjectPoint.x.value() - sensorOri.x.value();
                 double yDistance = noisyObjectPoint.y.value() - sensorOri.y.value();
-                
-                double relativeAngle = atan2(yDistance,xDistance);
-                double xNewRangePos = xDistance + mFovConfig.fieldOfView.rangeResolution.value() * cos(relativeAngle);//transform matrix for range                double yNewRangePos = yDistance + mFovConfig.fieldOfView.rangeResolution.value() * sin(relativeAngle);
-                double xNewRangeNeg = xDistance - mFovConfig.fieldOfView.rangeResolution.value() * cos(relativeAngle);
-                double yNewRangeNeg = yDistance - mFovConfig.fieldOfView.rangeResolution.value() * sin(relativeAngle);
-                double yNewRangePos = yDistance + mFovConfig.fieldOfView.rangeResolution.value() * sin(relativeAngle);
 
                 double angleResolutionRad = mFovConfig.fieldOfView.angleResolution.value()*PI/180.0;//convert degree to rad for sin/cos
                 double xNewAngleCounterClock = xDistance * cos(angleResolutionRad) - yDistance * sin(angleResolutionRad);//rotation matrix for angle
@@ -159,26 +208,14 @@ SensorDetection RealisticLidarSensor::detectObjects() const
 
                 double xNewAngleClock = xDistance * cos(angleResolutionRad) + yDistance * sin(angleResolutionRad);//rotation matrix for angle for other direction
                 double yNewAngleClock = -xDistance * sin(angleResolutionRad) + yDistance * cos(angleResolutionRad);
-                        
-                Position firstPos(sensorOri.x.value() + xNewRangePos , sensorOri.y.value() + yNewRangePos);
+
                 Position secondPos(sensorOri.x.value() + xNewAngleCounterClock, sensorOri.y.value() + yNewAngleCounterClock);
-                Position thirdPos(sensorOri.x.value() + xNewRangeNeg, sensorOri.y.value() + yNewRangeNeg);
+                Position thirdPos(noisyObjectPoint.x.value() , noisyObjectPoint.y.value());
                 Position fourthPos(sensorOri.x.value() + xNewAngleClock, sensorOri.y.value() + yNewAngleClock);
-                std::vector<Position> resolution = {firstPos, secondPos, thirdPos, fourthPos};//create box for resolution
+                std::vector<Position> resolution = {secondPos, thirdPos, fourthPos};//for resolution
                 
                 detection.objectPointResolutions.push_back(resolution);//draws the frame around each objectPoint
 
-                bool selfCheck = false;
-                for (auto& selfObjectResolution : noisyObjectPoints) {//check if objectPoints of same object are near each other
-                    if (selfCheck == false && selfObjectResolution == noisyObjectPoint) {
-                        selfCheck = true;//if multiple points are on the exact same positions ignore first appearance
-                        continue;
-                    }
-                    if (bg::within(selfObjectResolution, resolution)) {
-                        removePoint = true;//delete the current objectpoint
-                        break;
-                    }
-                }
                 for (auto& objectResolutionMap : noisyMap)//check if objectPoints are near other objects
                 {
                     auto& objectResolution = objectResolutionMap.first;
@@ -193,18 +230,6 @@ SensorDetection RealisticLidarSensor::detectObjects() const
                         auto objectResolution_vertex_descriptor = graphPropertyMap.find(objectResolution->getExternalId())->second;
                         boost::add_edge(object_vertex_decriptor, objectResolution_vertex_descriptor, graph);
                         ds.union_set(object_vertex_decriptor, objectResolution_vertex_descriptor);
-                        removePoint = true;//delete the current objectpoint
-                    }
-                }
-                if (removePoint) {//remove objectPoint from detection.visiblePoints and noisyObjectPoints
-                    auto noisyObjectIterator = std::find(noisyObjectPoints.begin(), noisyObjectPoints.end(), noisyObjectPoint);
-                    auto detectionIterator = std::find(detection.visiblePoints.begin(), detection.visiblePoints.end(), noisyObjectPoint);
-                    if (noisyObjectIterator != noisyObjectPoints.end()) {
-                        noisyObjectPoints.erase(noisyObjectIterator);
-                        if (detectionIterator != detection.visiblePoints.end()) {
-                            detection.visiblePoints.erase(detectionIterator); 
-                        }
-                        --loopIterator;//without decrements, the iterator will be out of vector range in the next loop or skip an element
                     }
                 }
             }
@@ -214,7 +239,7 @@ SensorDetection RealisticLidarSensor::detectObjects() const
         // Iterate through each disjoint set and access each set member (https://www.boost.org/doc/libs/1_78_0/libs/graph/example/incremental_components.cpp)
         BOOST_FOREACH (VertexIndex disjointSet, components)
         {
-            std::vector<std::shared_ptr<EnvironmentModelObject>> combinedObjects;
+            std::vector<std::weak_ptr<EnvironmentModelObject>> combinedObjects;
             std::vector<Position> visibleObjectPoints;
             BOOST_FOREACH (VertexIndex disjointSetMember, components[disjointSet])
             {
@@ -223,7 +248,7 @@ SensorDetection RealisticLidarSensor::detectObjects() const
                 if (noisyObjectPointsMapEntry != noisyMap.end()) {
                     const auto& noisyObjectPoints = noisyObjectPointsMapEntry->second;
                     if (!noisyObjectPoints.empty()) {
-                        combinedObjects.push_back(std::shared_ptr<EnvironmentModelObject>(ptr));
+                        combinedObjects.push_back(std::weak_ptr<EnvironmentModelObject>(ptr));
                         visibleObjectPoints.insert(visibleObjectPoints.end(), noisyObjectPoints.begin(), noisyObjectPoints.end());
                     }
                 }
@@ -242,31 +267,7 @@ SensorDetection RealisticLidarSensor::detectObjects() const
         for (const auto& object : preselObjectsInSensorRange) {
             // preselection: object's bounding box and sensor cone's bounding box intersect
             // now: check if their actual geometries intersect somewhere
-            // only creates noisy Positions, does not check resolution
-            std::vector<Position> visibleNoisyObjectPoints;
             if (bg::intersects(object->getOutline(), detection.sensorCone)) {
-                for (const auto& objectPoint : object->getOutline()) 
-                {
-                    Position sensorOri = detection.sensorOrigin;
-                    double xDistance = objectPoint.x.value() - sensorOri.x.value();
-                    double yDistance = objectPoint.y.value() - sensorOri.y.value();
-                    double angleError = normal(0, mFovConfig.fieldOfView.angleAccuracy.value(), 2);//get random noise for sensor
-                    double rangeError = normal(0, mFovConfig.fieldOfView.rangeAccuracy.value(), 2);
-
-                    double relativeAngle = atan2(yDistance,xDistance);
-                    double xNewRange = rangeError * cos(relativeAngle);//transform matrix for range
-                    double yNewRange = rangeError * sin(relativeAngle);
-                    
-                    double angleErrorRad = angleError*PI/180.0;//convert degree to rad for sin/cos
-                    double xNewAngle = xDistance * cos(angleErrorRad) - yDistance * sin(angleErrorRad);//rotation matrix for angle
-                    double yNewAngle = xDistance * sin(angleErrorRad) + yDistance * cos(angleErrorRad);
-                    Position newNoisyPosition(sensorOri.x.value() + xNewAngle + xNewRange, sensorOri.y.value() + yNewAngle + yNewRange);
-                    visibleNoisyObjectPoints.push_back(newNoisyPosition);
-                }
-                boost::units::quantity<boost::units::si::velocity>  avgVelocity = DBL_MAX * boost::units::si::meters_per_second;
-                std::vector<std::shared_ptr<EnvironmentModelObject>> objectWrapper;
-                objectWrapper.emplace_back(std::shared_ptr<EnvironmentModelObject>(object));
-                detection.objectWrapper.emplace_back(std::make_shared<EnvironmentModelObjectWrapper>(objectWrapper, visibleNoisyObjectPoints, object->getWidth(), object->getLength(), object->getCentrePoint(), avgVelocity));
                 detection.objects.push_back(object);
             }
         }

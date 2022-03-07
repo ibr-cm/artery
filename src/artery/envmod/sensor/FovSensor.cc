@@ -71,7 +71,7 @@ void FovSensor::measurement()
     mLastDetection = std::move(detection);
 }
 
-SensorDetection FovSensor::detectObjects() const
+SensorDetection FovSensor::detectObjects()
 {
     namespace bg = boost::geometry;
     if (mFovConfig.fieldOfView.range <= 0.0 * boost::units::si::meter) {

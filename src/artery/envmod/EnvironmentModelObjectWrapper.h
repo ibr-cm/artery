@@ -26,12 +26,12 @@ public:
     using Velocity = traci::VehicleType::Velocity;
 
     //lengthDimension1 was width, lengthDimension2 was length of an object
-    EnvironmentModelObjectWrapper(std::vector<std::shared_ptr<EnvironmentModelObject>> objectList, std::vector<Position> noisyPos, Length dimension1, Length dimension2, Position centre, Velocity velocity);
+    EnvironmentModelObjectWrapper(std::vector<std::weak_ptr<EnvironmentModelObject>> objectList, std::vector<Position> noisyPos, Length dimension1, Length dimension2, Position centre, Velocity velocity);
     /**
      * Returns all EnvironmentModelObjects describing the wrapper object
      * @return vector of all included EnvironmentModelObjects
      */
-    const std::vector<std::shared_ptr<EnvironmentModelObject>> getObjects() const { return mObjects; }
+    const std::vector<std::weak_ptr<EnvironmentModelObject>> getObjects() const { return mObjects; }
 
     /**
      * Returns the polygon describing the object's noisy outline
@@ -63,30 +63,25 @@ private:
     traci::VehicleType::Length mDimension1;//width
     traci::VehicleType::Velocity mVelocity;
     std::vector<Position> mNoisyOutline;
-    std::vector<std::shared_ptr<EnvironmentModelObject>> mObjects;
+    std::vector<std::weak_ptr<EnvironmentModelObject>> mObjects;
     Position mCentrePoint;
 };
 
     inline bool operator<(const EnvironmentModelObjectWrapper& left, const EnvironmentModelObjectWrapper& right) {
-        /*const auto& lCentre = left.getCentrePoint();
-        const auto& rCentre = right.getCentrePoint();
-        if (lCentre.x < rCentre.x) {
-            return true;
-        } else if (lCentre.x == rCentre.x && lCentre.y < rCentre.y) {
-            return true;
-        } else if (lCentre.x == 0 && lCentre.y == 0 && rCentre.x == 0 && rCentre.y == 0){
-            return true;
-        } else {
-            return false;   
-        }*/
-        
         if (left.getObjects().size() < right.getObjects().size()) {
             return true;
         } else if (left.getObjects().size() == right.getObjects().size()) {
             int i = 0;
             for (auto& lObj : left.getObjects()) {
-                if (lObj->getExternalId() < right.getObjects().at(i)->getExternalId())
+                if (!lObj.expired() && !right.getObjects().at(i).expired()) {
+                    auto lObjShr = lObj.lock();
+                    auto rObjShr = right.getObjects().at(i).lock();
+                    if (lObjShr->getExternalId() < rObjShr->getExternalId())
+                        return true;
+                //} else if (lObj.expired() && right.getObjects().at(i).expired()) {
+                } else {
                     return true;
+                }
                 i++;
             }
             return false;

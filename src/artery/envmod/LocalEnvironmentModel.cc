@@ -108,8 +108,14 @@ void LocalEnvironmentModel::update()
         const auto& object = it->first;
         Tracking& tracking = it->second;
         tracking.update();
-
-        if (tracking.expired()) {
+        bool expiredPtr = false;
+        for (auto& obj : object->getObjects()) {
+            if (obj.expired()) {
+                expiredPtr = true;
+                break;
+            }
+        }
+        if (expiredPtr || tracking.expired()) {
             it = mObjectWrapperMap.erase(it);
         } else {
             ++it;

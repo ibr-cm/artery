@@ -145,6 +145,7 @@
         "callback": "cpp",
         "image": "cpp",
         "kdtree": "cpp",
-        "elevationpool": "cpp"
+        "elevationpool": "cpp",
+        "graphicscontext": "cpp"
     }
 }

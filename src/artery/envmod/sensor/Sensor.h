@@ -27,7 +27,7 @@ public:
     virtual const std::string& getSensorCategory() const = 0;
     virtual const std::string getSensorName() const = 0;
     virtual void setSensorName(const std::string& name) = 0;
-    virtual SensorDetection detectObjects() const = 0;
+    virtual SensorDetection detectObjects() = 0;
 };
 
 } // namespace artery

@@ -25,7 +25,7 @@ public:
     const std::string& getSensorCategory() const override;
 
 protected:
-    SensorDetection detectObjects() const override;
+    SensorDetection detectObjects() override;
 };
 
 } // namespace artery

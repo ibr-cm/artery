@@ -72,7 +72,7 @@ const std::string& CamSensor::getSensorCategory() const
     return category;
 }
 
-SensorDetection CamSensor::detectObjects() const
+SensorDetection CamSensor::detectObjects()
 {
     // return empty sensor detection because CAM objects are added upon CAM reception signal
     SensorDetection detection;
