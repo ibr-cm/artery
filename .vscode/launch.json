@@ -27,10 +27,10 @@
 				"-r0"
 			],
 			"environment": [
-				{ "name": "ARTERY_HOME", "value": "/home/cengiz/Dokumente/artery" }//fragen
+				{ "name": "ARTERY_HOME", "value": "/home/cengiz/Dokumente/artery" }
 			],
 			"stopAtEntry": false,
-			"cwd": "${workspaceFolder}/scenarios/artery",//fragen
+			"cwd": "${workspaceFolder}/scenarios/artery",
 			"externalConsole": false,
 			"MIMode": "gdb",
 			"setupCommands": [
