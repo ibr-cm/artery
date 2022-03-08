@@ -225,7 +225,7 @@ SensorDetection RealisticLidarSensor::detectObjects()
 
                     auto& objectResolutionNoisyOutline = objectResolutionMap.second;
 
-                    if (bg::intersects(resolution, objectResolutionNoisyOutline)) {
+                    if (bg::touches(resolution, objectResolutionNoisyOutline)) {
                         auto object_vertex_decriptor = graphPropertyMap.find(object->getExternalId())->second;
                         auto objectResolution_vertex_descriptor = graphPropertyMap.find(objectResolution->getExternalId())->second;
                         boost::add_edge(object_vertex_decriptor, objectResolution_vertex_descriptor, graph);
