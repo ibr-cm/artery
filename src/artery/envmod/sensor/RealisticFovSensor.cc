@@ -106,8 +106,8 @@ void RealisticFovSensor::measurement()
             for (const auto& obj : objectWrapper->getObjects()) {
                 if (!obj.expired()) {
                     auto objShr = obj.lock();
-                    double xlen = objShr->getCentrePoint().x.value()-objectWrapper->getCentrePoint().x.value();
-                    double ylen = objShr->getCentrePoint().y.value()-objectWrapper->getCentrePoint().y.value();
+                    double xlen = abs(objShr->getCentrePoint().x.value()-objectWrapper->getCentrePoint().x.value());
+                    double ylen = abs(objShr->getCentrePoint().y.value()-objectWrapper->getCentrePoint().y.value());
                     emit(FovOffCentreXSignal, xlen);
                     emit(FovOffCentreYSignal, ylen);
                     emit(FovOffCentreLengthSignal, sqrt(pow(xlen,2)+pow(ylen,2)));
