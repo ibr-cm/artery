@@ -440,11 +440,20 @@ void RealisticFovSensor::measureDimensions(std::vector<Position> *visibleObjectP
             std::vector<Position> hull;
             boost::geometry::model::d2::point_xy<double> hullCentre;
             boost::geometry::convex_hull(*visibleObjectPoints, hull);//alternatively use envelope function for a "bounding box"
-            boost::geometry::centroid(hull, hullCentre);//TODO: centroid exception
-            visibleObjectPoints->clear();
-            visibleObjectPoints->insert(visibleObjectPoints->end(), hull.begin(), hull.end());
-            *centreX = hullCentre.x();
-            *centreY = hullCentre.y();
+            try
+            {
+                boost::geometry::centroid(hull, hullCentre);
+                visibleObjectPoints->clear();
+                visibleObjectPoints->insert(visibleObjectPoints->end(), hull.begin(), hull.end());
+                *centreX = hullCentre.x();
+                *centreY = hullCentre.y();
+            }
+            catch(const boost::geometry::centroid_exception& e)
+            {
+                std::cerr << e.what() << ' centroid error\n';
+                *centreX = 0;
+                *centreY = 0;
+            }
             *dimension1 = 0;
             *dimension2 = 0;
             break;
