@@ -450,7 +450,7 @@ void RealisticFovSensor::measureDimensions(std::vector<Position> *visibleObjectP
             }
             catch(const boost::geometry::centroid_exception& e)
             {
-                std::cerr << e.what() << ' centroid error\n';
+                std::cerr << e.what() << " centroid error\n";
                 *centreX = 0;
                 *centreY = 0;
             }
