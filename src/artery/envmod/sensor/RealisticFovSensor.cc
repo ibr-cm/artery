@@ -181,9 +181,11 @@ SensorDetection RealisticFovSensor::detectObjects()
                     Position sensorOri = detection.sensorOrigin;
                     double xDistance = objectPoint.x.value() - sensorOri.x.value();
                     double yDistance = objectPoint.y.value() - sensorOri.y.value();
-                    double angleError = normal(0, mFovConfig.fieldOfView.angleAccuracy.value(), 2);//get random noise for sensor
-                    double rangeError = normal(0, mFovConfig.fieldOfView.rangeAccuracy.value(), 2);
-                    double velocityError = normal(0, mFovConfig.fieldOfView.velocityAccuracy.value(), 2);
+
+                    //get random noise for sensor. 95% of all values are within the accuracy of the sensor attribute
+                    double angleError = normal(0, mFovConfig.fieldOfView.angleAccuracy.value() / 1.960);
+                    double rangeError = normal(0, mFovConfig.fieldOfView.rangeAccuracy.value() / 1.960);
+                    double velocityError = normal(0, mFovConfig.fieldOfView.velocityAccuracy.value() / 1.960);
 
                     emit(FovAngleErrSignal, angleError);
                     emit(FovRangeErrSignal, rangeError);
@@ -250,30 +252,47 @@ SensorDetection RealisticFovSensor::detectObjects()
             {
                 auto& noisyObjectPoint = *loopIterator;
                 bool removePoint = false;
+
+                // get sensor's absolute position
                 Position sensorOri = detection.sensorOrigin;
+
+                // determine x and y distance to object
                 double xDistance = noisyObjectPoint.x.value() - sensorOri.x.value();
                 double yDistance = noisyObjectPoint.y.value() - sensorOri.y.value();
 
+                // calculate polar angle to object
                 double relativeAngle = atan2(yDistance,xDistance);
-                double xNewRangePos = xDistance + mFovConfig.fieldOfView.rangeResolution.value() * cos(relativeAngle);//transform matrix for range                double yNewRangePos = yDistance + mFovConfig.fieldOfView.rangeResolution.value() * sin(relativeAngle);
-                double xNewRangeNeg = xDistance - mFovConfig.fieldOfView.rangeResolution.value() * cos(relativeAngle);
-                double yNewRangeNeg = yDistance - mFovConfig.fieldOfView.rangeResolution.value() * sin(relativeAngle);
-                double yNewRangePos = yDistance + mFovConfig.fieldOfView.rangeResolution.value() * sin(relativeAngle);
 
-                double angleResolutionRad = mFovConfig.fieldOfView.angleResolution.value()*PI/180.0;//convert degree to rad for sin/cos
-                double xNewAngleCounterClock = xDistance * cos(angleResolutionRad) - yDistance * sin(angleResolutionRad);//rotation matrix for angle
-                double yNewAngleCounterClock = xDistance * sin(angleResolutionRad) + yDistance * cos(angleResolutionRad);
+                // precompute rotation values
+                double cosRelAngle = cos(relativeAngle);
+                double sinRelAngle = sin(relativeAngle);
 
-                double xNewAngleClock = xDistance * cos(angleResolutionRad) + yDistance * sin(angleResolutionRad);//rotation matrix for angle for other direction
-                double yNewAngleClock = -xDistance * sin(angleResolutionRad) + yDistance * cos(angleResolutionRad);
-                        
-                Position firstPos(sensorOri.x.value() + xNewRangePos , sensorOri.y.value() + yNewRangePos);
-                Position secondPos(sensorOri.x.value() + xNewAngleCounterClock, sensorOri.y.value() + yNewAngleCounterClock);
-                Position thirdPos(sensorOri.x.value() + xNewRangeNeg, sensorOri.y.value() + yNewRangeNeg);
-                Position fourthPos(sensorOri.x.value() + xNewAngleClock, sensorOri.y.value() + yNewAngleClock);
-                std::vector<Position> resolution = {firstPos, secondPos, thirdPos, fourthPos};//create box for resolution
-                
-                detection.objectPointResolutions.push_back(resolution);//draws the frame around each objectPoint
+                double objectDistance = sqrt(pow(xDistance, 2) + pow(yDistance, 2));
+
+                // calculate selectivity based on range to object
+                double rangeSelectivity = mFovConfig.fieldOfView.rangeResolution.value() / 2.0;
+                double angularSelectivity = objectDistance * tan((mFovConfig.fieldOfView.angleResolution.value() / 2.0) * PI/180.0);
+
+                // resolution box
+                std::vector<Position> resolution = {
+                    Position(objectDistance - rangeSelectivity, -angularSelectivity),
+                    Position(objectDistance - rangeSelectivity, angularSelectivity),
+                    Position(objectDistance + rangeSelectivity, angularSelectivity),
+                    Position(objectDistance + rangeSelectivity, -angularSelectivity),
+                };
+
+                // rotate and translate box
+                std::vector<Position> resolutionBoxVertices;
+                for (Position p: resolution) {
+                    double x_ = p.x.value() * cosRelAngle - p.y.value() * sinRelAngle;
+                    double y_ = p.x.value() * sinRelAngle + p.y.value() * cosRelAngle;
+                    resolutionBoxVertices.push_back(Position(sensorOri.x.value() + x_, sensorOri.y.value() + y_));
+                }
+
+                if (mDrawResolution) {
+                    //draws the frame around each objectPoint
+                    detection.objectPointResolutions.push_back(resolutionBoxVertices);
+                }
 
                 bool selfCheck = false;
                 for (auto& selfObjectResolution : noisyObjectPoints) {//check if objectPoints of same object are near each other
