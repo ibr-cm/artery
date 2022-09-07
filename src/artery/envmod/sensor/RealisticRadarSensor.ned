@@ -42,8 +42,7 @@ simple RealisticRadarSensor like RealisticFovSensor
         double fovRange @unit(m) = default(80.0 m);
         double fovAngle = default(60.0); // degree
         string attachmentPoint = default("FRONT");
-        int numSegments = default(1);
-        bool doLineOfSightCheck = default(true);
+        int numSegments = default(6);
 
         double angleAccuracy = default(0.0); // degree
         double rangeAccuracy @unit(m) = default(0.0 m); 

@@ -40,8 +40,8 @@ SensorDetection RealisticLidarSensor::detectObjects()
     auto preselObjectsInSensorRange = mGlobalEnvironmentModel->preselectObjects(mFovConfig.egoID, detection.sensorCone);
     auto obstacleIntersections = mGlobalEnvironmentModel->preselectObstacles(detection.sensorCone);
 
-    if (mFovConfig.doLineOfSightCheck)
-    {
+    // if (mFovConfig.doLineOfSightCheck)
+    // {
         std::unordered_set<std::shared_ptr<EnvironmentModelObstacle>> blockingObstacles;
         auto graph = AdjList();
         std::map<std::string, boost::graph_traits<AdjList>::vertex_descriptor> graphPropertyMap;
@@ -89,7 +89,7 @@ SensorDetection RealisticLidarSensor::detectObjects()
                     Position sensorOri = detection.sensorOrigin;
                     double xDistance = objectPoint.x.value() - sensorOri.x.value();
                     double yDistance = objectPoint.y.value() - sensorOri.y.value();
-                    double rangeError = normal(0, mFovConfig.fieldOfView.rangeAccuracy.value(), 2);//get random noise for sensor
+                    double rangeError = normal(0, mFovConfig.fieldOfView.rangeAccuracy.value());//get random noise for sensor
 
                     emit(FovRangeErrSignal, rangeError);
 
@@ -256,24 +256,53 @@ SensorDetection RealisticLidarSensor::detectObjects()
             //create objectWrapper for each disjoint set 
             boost::units::quantity<boost::units::si::velocity> averageVelocity = DBL_MAX * boost::units::si::meters_per_second;
             double centreX = 0, centreY = 0, newDimension1 = 0, newDimension2 = 0;
-            measureDimensions(&visibleObjectPoints, &newDimension1, &newDimension2, &centreX, &centreY);
+            // measureDimensions(&visibleObjectPoints, &newDimension1, &newDimension2, &centreX, &centreY);
             Position newCentre(centreX,centreY);
             boost::units::quantity<boost::units::si::length> meterDimension1 = newDimension1 * boost::units::si::meters;
             boost::units::quantity<boost::units::si::length> meterDimension2 = newDimension2 * boost::units::si::meters;
-            detection.objectWrapper.emplace_back(std::make_shared<EnvironmentModelObjectWrapper>(combinedObjects, visibleObjectPoints, meterDimension1, meterDimension2, newCentre, averageVelocity));
+            detection.objectWrapper.emplace_back(std::make_shared<EnvironmentModelObjectWrapper>(combinedObjects, visibleObjectPoints, 0.0 * boost::units::si::meters_per_second));
         }
         detection.obstacles.assign(blockingObstacles.begin(), blockingObstacles.end());
-    } else {
-        for (const auto& object : preselObjectsInSensorRange) {
-            // preselection: object's bounding box and sensor cone's bounding box intersect
-            // now: check if their actual geometries intersect somewhere
-            if (bg::intersects(object->getOutline(), detection.sensorCone)) {
-                detection.objects.push_back(object);
-            }
-        }
-    }
+    // } else {
+    //     for (const auto& object : preselObjectsInSensorRange) {
+    //         // preselection: object's bounding box and sensor cone's bounding box intersect
+    //         // now: check if their actual geometries intersect somewhere
+    //         if (bg::intersects(object->getOutline(), detection.sensorCone)) {
+    //             detection.objects.push_back(object);
+    //         }
+    //     }
+    // }
 
     return detection;
+}
+
+std::vector<Position> RealisticLidarSensor::applyMeasurementInaccuracy(SensorDetection &detection, std::vector<Position> outline)
+{
+    ;
+}
+
+std::vector<double> RealisticLidarSensor::applyVelocityInaccuracy(std::vector<Position> outline, vanetza::units::Velocity velocity)
+{
+    std::vector<double> noisyVelocities;  
+    for (auto objectPoint : outline)
+    {
+        noisyVelocities.push_back(DBL_MAX);
+    }
+    return noisyVelocities;
+}
+
+
+std::vector<Position> RealisticLidarSensor::filterLineOfSight(std::vector<std::shared_ptr<EnvironmentModelObstacle>> obstacleIntersections, 
+                                                        std::vector<std::shared_ptr<EnvironmentModelObject>> preselObjectsInSensorRange, 
+                                                        SensorDetection &detection, 
+                                                        std::vector<Position> outline)
+{
+    ;
+}
+
+std::vector<Position> RealisticLidarSensor::applyResolution(SensorDetection &detection, std::vector<Position> outline)
+{
+    ;
 }
 
 } // namespace artery

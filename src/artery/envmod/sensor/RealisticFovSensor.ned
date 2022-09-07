@@ -13,7 +13,6 @@ moduleinterface RealisticFovSensor
         double fovAngle; // opening angle in degree
         string attachmentPoint;
         int numSegments;
-        bool doLineOfSightCheck;
 
         double angleAccuracy; //degree
         double rangeAccuracy @unit(m);

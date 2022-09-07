@@ -39,6 +39,7 @@ public:
     const std::string getSensorName() const override;
     void setSensorName(const std::string& name) override;
     virtual SensorDetection detectObjects() override;
+
 protected:
     template<typename T>
     class Updatable
@@ -60,7 +61,14 @@ protected:
     void refreshDisplay() const override;
     virtual SensorDetection createSensorCone() const;
 
-    void measureDimensions(std::vector<Position> *visiblePositions, double *width, double *length, double *centreX, double *centreY);
+    virtual std::vector<Position> applyMeasurementInaccuracy(SensorDetection &detection, std::vector<Position> outline) = 0;
+    virtual std::vector<double> applyVelocityInaccuracy(std::vector<Position> outline, vanetza::units::Velocity velocity) = 0;
+    
+    virtual std::vector<Position> filterLineOfSight(std::vector<std::shared_ptr<EnvironmentModelObstacle>> obstacleIntersections, 
+                                        std::vector<std::shared_ptr<EnvironmentModelObject>> preselObjectsInSensorRange, 
+                                        SensorDetection &detection, 
+                                        std::vector<Position> outline) = 0;
+    virtual std::vector<Position> applyResolution(SensorDetection &detection, std::vector<Position> outline) = 0;
 
     SensorConfigFov mFovConfig;
     Updatable<SensorDetection> mLastDetection;

@@ -27,6 +27,8 @@ public:
 
     //lengthDimension1 was width, lengthDimension2 was length of an object
     EnvironmentModelObjectWrapper(std::vector<std::weak_ptr<EnvironmentModelObject>> objectList, std::vector<Position> noisyPos, Length dimension1, Length dimension2, Position centre, Velocity velocity);
+
+    EnvironmentModelObjectWrapper(std::vector<std::weak_ptr<EnvironmentModelObject>> objectList, std::vector<Position> visibleObjectPoints, boost::units::quantity<boost::units::si::velocity> averageVelocity);
     /**
      * Returns all EnvironmentModelObjects describing the wrapper object
      * @return vector of all included EnvironmentModelObjects
