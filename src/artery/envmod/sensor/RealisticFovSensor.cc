@@ -133,12 +133,11 @@ SensorDetection RealisticFovSensor::detectObjects()
 
     std::unordered_set<std::shared_ptr<EnvironmentModelObstacle>> blockingObstacles;
     auto graph = AdjList();
-    std::map<std::shared_ptr<EnvironmentModelObject>, std::tuple<std::vector<Position>, double, boost::graph_traits<AdjList>::vertex_descriptor>> noisyObjects;
+    std::map<std::shared_ptr<EnvironmentModelObject>, std::tuple<std::vector<Position>, std::vector<Position>, double, boost::graph_traits<AdjList>::vertex_descriptor>> noisyObjects;
 
     // check if objects in sensor cone are hidden by another object or an obstacle
     for (const auto& object : preselObjectsInSensorRange)
     {
-    
         // filter all outline points which are not in line of sight
         std::vector<Position> visibleObjectPoints = filterLineOfSight(obstacleIntersections, 
                                                         preselObjectsInSensorRange, 
@@ -157,13 +156,15 @@ SensorDetection RealisticFovSensor::detectObjects()
             //calculate average velocity for object
             double averageNoisyVelocity = std::accumulate(noisyVelocities.begin(), noisyVelocities.end(), 0.0) / noisyVelocities.size();
 
+            std::vector<Position> resolutionHull = computeResolutionBounds(detection, visibleNoisyObjectPoints);
+
             //create vertex for every detected object
             Node vertexNode;
             vertexNode.objectPtr = std::shared_ptr<EnvironmentModelObject>(object);
             auto vertex_descript = boost::add_vertex(vertexNode,graph);
 
             //store noisy outline, velocity and vertex_descriptor
-            noisyObjects.emplace(std::shared_ptr<EnvironmentModelObject>(object), std::make_tuple(visibleNoisyObjectPoints, averageNoisyVelocity, vertex_descript));
+            noisyObjects.emplace(std::shared_ptr<EnvironmentModelObject>(object), std::make_tuple(visibleNoisyObjectPoints, resolutionHull, averageNoisyVelocity, vertex_descript));
         }
     } // for each object real LOS
 
@@ -180,112 +181,59 @@ SensorDetection RealisticFovSensor::detectObjects()
     initialize_incremental_components(graph, ds);
     incremental_components(graph, ds);
     int removedPoints = 0;
-    for(auto& objectPair : noisyObjects)
+    for(auto& noisyObject : noisyObjects)
     {
-        auto& object = objectPair.first;
-        auto& noisyObjectPoints = std::get<0>(objectPair.second);
-        auto& objectVelocity = std::get<1>(objectPair.second);
+        auto& object = noisyObject.first;
+        auto& noisyObjectPoints = std::get<0>(noisyObject.second);
+        auto& resolutionHull = std::get<1>(noisyObject.second);
+        auto& objectVelocity = std::get<2>(noisyObject.second);
 
         if (noisyObjectPoints.empty()) {
             continue;
         }
         
-        for (auto loopIterator = noisyObjectPoints.begin(); loopIterator != noisyObjectPoints.end(); ++loopIterator) 
+        //check if objectPoints are near other objects
+        for (auto& otherNoisyObject : noisyObjects)
         {
-            auto& noisyObjectPoint = *loopIterator;
-            bool removePoint = false;
-
-            // determine x and y distance to object
-            double xDistance = noisyObjectPoint.x.value() - detection.sensorOrigin.x.value();
-            double yDistance = noisyObjectPoint.y.value() - detection.sensorOrigin.y.value();
-
-            // calculate polar angle to object
-            double relativeAngle = atan2(yDistance,xDistance);
-
-            // precompute rotation values
-            double cosRelAngle = cos(relativeAngle);
-            double sinRelAngle = sin(relativeAngle);
-
-            double objectDistance = sqrt(pow(xDistance, 2) + pow(yDistance, 2));
-
-            // calculate selectivity based on range to object
-            double rangeSelectivity = mFovConfig.fieldOfView.rangeResolution.value() / 2.0;
-            double angularSelectivity = objectDistance * tan((mFovConfig.fieldOfView.angleResolution.value() / 2.0) * PI/180.0);
-
-            // selectivity box
-            std::vector<Position> selectivity = {
-                Position(objectDistance - rangeSelectivity, -angularSelectivity),
-                Position(objectDistance - rangeSelectivity, angularSelectivity),
-                Position(objectDistance + rangeSelectivity, angularSelectivity),
-                Position(objectDistance + rangeSelectivity, -angularSelectivity),
-            };
-
-            // rotate and translate box
-            std::vector<Position> resolution;
-            for (Position p: selectivity) {
-                double x_ = p.x.value() * cosRelAngle - p.y.value() * sinRelAngle;
-                double y_ = p.x.value() * sinRelAngle + p.y.value() * cosRelAngle;
-                resolution.push_back(Position(detection.sensorOrigin.x.value() + x_, detection.sensorOrigin.y.value() + y_));
+            //only check different vehicles
+            // auto& objectResolution = otherNoisyObject.first;
+            if (otherNoisyObject.first->getExternalId() == object->getExternalId()) {
+                continue;
             }
 
-            if (mDrawResolution) {
-                //draws the frame around each objectPoint
-                detection.objectPointResolutions.push_back(resolution);
-            }
+            // check if point of other object's outline is within the resolution box
+            auto& otherObjectOutline =  std::get<0>(otherNoisyObject.second);
 
-            //check if objectPoints of same object are too close to each other
-            bool selfCheck = false;
-            for (auto& selfObjectResolution : noisyObjectPoints) {
-                if (selfCheck == false && selfObjectResolution == noisyObjectPoint) {
-                    selfCheck = true;//if multiple points are on the exact same positions ignore first appearance
-                    continue;
-                }
-                if (bg::within(selfObjectResolution, resolution)) {
-                    removePoint = true;//delete the current objectpoint
-                    break;
-                }
-            }
+            std::vector<Position> unselectivePoints;
 
-            //check if objectPoints are near other objects
-            for (auto& objectResolutionMap : noisyObjects)
-            {
-                //only check different vehicles
-                auto& objectResolution = objectResolutionMap.first;
-                if (objectResolution->getExternalId() == object->getExternalId()) {
-                    continue;
-                }
-                
-                //check if velocity of both objects is distingushable
-                const auto& velocityMapPair = std::get<1>(objectResolutionMap.second);
-                bool upperLimit = objectVelocity + mFovConfig.fieldOfView.velocityResolution.value() < velocityMapPair;
-                bool lowerLimit = objectVelocity - mFovConfig.fieldOfView.velocityResolution.value() > velocityMapPair;
-                bool outsideVelocityResolution = upperLimit || lowerLimit;
+            for (auto otherObjectOutlinePoint: otherObjectOutline) {
+                if (bg::within(otherObjectOutlinePoint, resolutionHull)) {
 
+                    //check if velocity of both objects is distingushable
+                    const auto& otherObjectVelocity = std::get<2>(otherNoisyObject.second);
+                    bool upperLimit = objectVelocity + (mFovConfig.fieldOfView.velocityResolution.value() / 2.0) < otherObjectVelocity;
+                    bool lowerLimit = objectVelocity - (mFovConfig.fieldOfView.velocityResolution.value() / 2.0) > otherObjectVelocity;
+                    if (upperLimit || lowerLimit) {
+                        EV_INFO << "Found undistinguishable point of " << otherNoisyObject.first->getExternalId() << " within hull of " << noisyObject.first->getExternalId() << std::endl;
+                        unselectivePoints.push_back(otherObjectOutlinePoint);
 
-                // check if point of outline is within the resolution box
-                auto& objectResolutionNoisyOutline =  std::get<0>(objectResolutionMap.second);
-                if (!(outsideVelocityResolution) && bg::intersects(resolution, objectResolutionNoisyOutline)) {
-
-                    auto object_vertex_decriptor = std::get<2>(objectPair.second);
-                    auto objectResolution_vertex_descriptor =  std::get<2>(objectResolutionMap.second);
-                    // auto object_vertex_decriptor = graphPropertyMap.find(object->getExternalId())->second;
-                    // auto objectResolution_vertex_descriptor = graphPropertyMap.find(objectResolution->getExternalId())->second;
-                    boost::add_edge(object_vertex_decriptor, objectResolution_vertex_descriptor, graph);
-                    ds.union_set(object_vertex_decriptor, objectResolution_vertex_descriptor);
-                    removePoint = true;//delete the current objectpoint
-                }
-            }
-            if (removePoint) {//remove objectPoint from detection.visiblePoints and noisyObjectPoints
-                auto noisyObjectIterator = std::find(noisyObjectPoints.begin(), noisyObjectPoints.end(), noisyObjectPoint);
-                auto detectionIterator = std::find(detection.visiblePoints.begin(), detection.visiblePoints.end(), noisyObjectPoint);
-                if (noisyObjectIterator != noisyObjectPoints.end()) {
-                    removedPoints++;
-                    noisyObjectPoints.erase(noisyObjectIterator);
-                    if (detectionIterator != detection.visiblePoints.end()) {
-                        detection.visiblePoints.erase(detectionIterator); 
+                        auto otherNoisyObjectIterator = std::find(otherObjectOutline.begin(), otherObjectOutline.end(), otherObjectOutlinePoint);
+                        auto detectionIterator = std::find(detection.visiblePoints.begin(), detection.visiblePoints.end(), otherObjectOutlinePoint);
+                        otherObjectOutline.erase(otherNoisyObjectIterator);
+                        if (detectionIterator != detection.visiblePoints.end()) {
+                            detection.visiblePoints.erase(detectionIterator);
+                        }
                     }
-                    --loopIterator;//without decrements, the iterator will be out of vector range in the next loop or skip an element
                 }
+            }
+
+            if (!unselectivePoints.empty()) {
+                EV_INFO << "Merging" << noisyObject.first->getExternalId() << " and " << otherNoisyObject.first->getExternalId() << std::endl;
+                auto object_vertex_decriptor = std::get<3>(noisyObject.second);
+                auto objectResolution_vertex_descriptor =  std::get<3>(otherNoisyObject.second);
+                boost::add_edge(object_vertex_decriptor, objectResolution_vertex_descriptor, graph);
+                ds.union_set(object_vertex_decriptor, objectResolution_vertex_descriptor);
+                // removePoint = true;//delete the current objectpoint
             }
         }
     }
@@ -296,7 +244,7 @@ SensorDetection RealisticFovSensor::detectObjects()
     BOOST_FOREACH (VertexIndex disjointSet, components)
     {
         std::vector<std::weak_ptr<EnvironmentModelObject>> combinedObjects;
-        std::vector<Position> visibleObjectPoints;
+        std::vector<Position> objectWrapperPoints;
         double sum = 0;
         int size = 0;
         BOOST_FOREACH (VertexIndex disjointSetMember, components[disjointSet])
@@ -306,16 +254,34 @@ SensorDetection RealisticFovSensor::detectObjects()
             if (noisyObjectPointsMapEntry != noisyObjects.end()) {
                 const auto& noisyObjectPoints = std::get<0>(noisyObjectPointsMapEntry->second);
                 if (!noisyObjectPoints.empty()) {
-                    sum += std::get<1>(noisyObjectPointsMapEntry->second);
+                    sum += std::get<2>(noisyObjectPointsMapEntry->second);
                     size++;
                     combinedObjects.push_back(std::weak_ptr<EnvironmentModelObject>(ptr));
-                    visibleObjectPoints.insert(visibleObjectPoints.end(), noisyObjectPoints.begin(), noisyObjectPoints.end());
+                    objectWrapperPoints.insert(objectWrapperPoints.end(), noisyObjectPoints.begin(), noisyObjectPoints.end());
                 }
             }
         }
         if (size == 0) {
             size = 1;
         }
+
+        // filter all outline points which are not in line of sight
+        std::vector<Position> visibleObjectPoints;
+        for (auto objectWrapperPoint : objectWrapperPoints)
+        {
+            LineOfSight lineOfSight;
+            lineOfSight[0] = detection.sensorOrigin;
+            lineOfSight[1] = objectWrapperPoint;
+
+            if (!bg::crosses(lineOfSight, objectWrapperPoints)) {
+                visibleObjectPoints.push_back(objectWrapperPoint);
+
+                if (mDrawLinesOfSight) {
+                    detection.visiblePoints.push_back(objectWrapperPoint);
+                }
+            }
+        }
+
         //create objectWrapper for each disjoint set
         boost::units::quantity<boost::units::si::velocity> averageVelocity = (sum/size) * boost::units::si::meters_per_second;
         detection.objectWrapper.emplace_back(std::make_shared<EnvironmentModelObjectWrapper>(combinedObjects, visibleObjectPoints, averageVelocity));
@@ -485,7 +451,9 @@ void RealisticFovSensor::refreshDisplay() const
                 auto polygon = new cPolygonFigure();
                 polygon->setFilled(true);
                 polygon->setFillColor(mColor);
+                // polygon->setFillOpacity(0.5);
                 polygon->setLineColor(cFigure::GREEN);
+                polygon->setLineWidth(2);
                 for (const auto& position : objectWrapper->getNoisyOutline()) {
                     polygon->addPoint(cFigure::Point { position.x.value(), position.y.value() });
                 }

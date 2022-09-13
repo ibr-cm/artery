@@ -15,17 +15,6 @@ namespace artery
 using Length = traci::VehicleType::Length;
 using Velocity = traci::VehicleType::Velocity;
 
-
-EnvironmentModelObjectWrapper::EnvironmentModelObjectWrapper(std::vector<std::weak_ptr<EnvironmentModelObject>> objectList, std::vector<Position> noisyPos, Length dimension1, Length dimension2, Position centre, Velocity velocity)
-{
-    mObjects = objectList;
-    mNoisyOutline = noisyPos;
-    mDimension2 = dimension2;
-    mDimension1 = dimension1;
-    mCentrePoint = centre;
-    mVelocity = velocity;
-}
-
 EnvironmentModelObjectWrapper::EnvironmentModelObjectWrapper(std::vector<std::weak_ptr<EnvironmentModelObject>> objectList, std::vector<Position> visibleObjectPoints, boost::units::quantity<boost::units::si::velocity> averageVelocity)
 {
     mObjects = objectList;

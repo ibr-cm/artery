@@ -26,8 +26,6 @@ public:
     using Velocity = traci::VehicleType::Velocity;
 
     //lengthDimension1 was width, lengthDimension2 was length of an object
-    EnvironmentModelObjectWrapper(std::vector<std::weak_ptr<EnvironmentModelObject>> objectList, std::vector<Position> noisyPos, Length dimension1, Length dimension2, Position centre, Velocity velocity);
-
     EnvironmentModelObjectWrapper(std::vector<std::weak_ptr<EnvironmentModelObject>> objectList, std::vector<Position> visibleObjectPoints, boost::units::quantity<boost::units::si::velocity> averageVelocity);
     /**
      * Returns all EnvironmentModelObjects describing the wrapper object
@@ -65,8 +63,10 @@ private:
     traci::VehicleType::Length mDimension1;//width
     traci::VehicleType::Velocity mVelocity;
     std::vector<Position> mNoisyOutline;
+    std::vector<Position> mResolutionHull;
     std::vector<std::weak_ptr<EnvironmentModelObject>> mObjects;
     Position mCentrePoint;
+
 };
 
     inline bool operator<(const EnvironmentModelObjectWrapper& left, const EnvironmentModelObjectWrapper& right) {

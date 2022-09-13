@@ -7,6 +7,8 @@
 #include "artery/envmod/sensor/RealisticRadarSensor.h"
 #include "artery/envmod/sensor/SensorDetection.h"
 
+#include <vector>
+#include <iterator>
 #include <boost/geometry.hpp>
 #include <boost/geometry/geometries/point_xy.hpp>
 #include <boost/geometry/geometries/register/linestring.hpp>
@@ -70,8 +72,9 @@ std::vector<Position> RealisticRadarSensor::applyMeasurementInaccuracy(SensorDet
         double xNewRange = rangeError * cos(relativeAngle);//transform matrix for range
         double yNewRange = rangeError * sin(relativeAngle);
 
-        noisyOutline.push_back(Position(sensorOri.x.value() + xNewAngle + xNewRange, 
-                                        sensorOri.y.value() + yNewAngle + yNewRange));
+        Position noisyObjectPoint = Position(sensorOri.x.value() + xNewAngle + xNewRange, sensorOri.y.value() + yNewAngle + yNewRange);
+        noisyOutline.push_back(noisyObjectPoint);
+
     } // for each (corner) point of object polygon
 
     return noisyOutline;
@@ -123,9 +126,6 @@ std::vector<Position> RealisticRadarSensor::filterLineOfSight(std::vector<std::s
         if (noVehicleOccultation && noObstacleOccultation)
         {
             visibleNoisyObjectPoints.push_back(objectPoint);
-            if (mDrawLinesOfSight) {
-                detection.visiblePoints.push_back(objectPoint);
-            }
         }
 
     }
@@ -133,9 +133,70 @@ std::vector<Position> RealisticRadarSensor::filterLineOfSight(std::vector<std::s
     return visibleNoisyObjectPoints;
 }
 
-std::vector<Position> RealisticRadarSensor::applyResolution(SensorDetection &detection, std::vector<Position> outline)
+std::vector<Position> RealisticRadarSensor::computeResolutionBounds(SensorDetection &detection, std::vector<Position> outline)
 {
-    ;
+    std::vector<Position> resolution;
+    std::vector<Position> hull;
+
+    for (auto objectPoint: outline)
+    {
+        // determine x and y distance to object
+        double xDistance = objectPoint.x.value() - detection.sensorOrigin.x.value();
+        double yDistance = objectPoint.y.value() - detection.sensorOrigin.y.value();
+
+        // calculate polar angle to object
+        double relativeAngle = atan2(yDistance,xDistance);
+
+        // precompute rotation values
+        double cosRelAngle = cos(relativeAngle);
+        double sinRelAngle = sin(relativeAngle);
+
+        double objectDistance = sqrt(pow(xDistance, 2) + pow(yDistance, 2));
+
+        // calculate selectivity based on range to object
+        double rangeSelectivity = mFovConfig.fieldOfView.rangeResolution.value() / 2.0;
+        double angularSelectivity = objectDistance * tan((mFovConfig.fieldOfView.angleResolution.value() / 2.0) * PI/180.0);
+
+        // selectivity box
+        std::vector<Position> selectivity = {
+            Position(objectDistance - rangeSelectivity, -angularSelectivity),
+            Position(objectDistance - rangeSelectivity, angularSelectivity),
+            Position(objectDistance + rangeSelectivity, angularSelectivity),
+            Position(objectDistance + rangeSelectivity, -angularSelectivity),
+        };
+
+        // rotate and translate box
+        std::vector<Position> box;
+        for (Position p: selectivity) {
+            double x_ = p.x.value() * cosRelAngle - p.y.value() * sinRelAngle;
+            double y_ = p.x.value() * sinRelAngle + p.y.value() * cosRelAngle;
+            box.push_back(Position(detection.sensorOrigin.x.value() + x_, detection.sensorOrigin.y.value() + y_));
+        }
+
+        // check if other objectPoints of same object are too close to each other
+        bool selfCheck = false;
+        for (auto& selfObjectResolution : outline) {
+            if (selfCheck == false && selfObjectResolution == objectPoint) {
+                selfCheck = true;//if multiple points are on the exact same positions ignore first appearance
+                    continue;
+                }
+
+                if (resolution.empty() || !boost::geometry::within(selfObjectResolution, box)) {
+                    resolution.insert(resolution.end(),
+                                        std::make_move_iterator(box.begin()),
+                                        std::make_move_iterator(box.end()));
+            }
+        }
+    }
+
+    boost::geometry::convex_hull(resolution, hull);
+
+    if (mDrawResolution) {
+        //draws the frame around each objectPoint
+        detection.objectPointResolutions.push_back(hull);
+    }
+
+    return hull;
 }
 
 

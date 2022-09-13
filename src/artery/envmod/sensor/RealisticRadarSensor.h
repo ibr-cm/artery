@@ -25,7 +25,7 @@ protected:
                                     std::vector<std::shared_ptr<EnvironmentModelObject>> preselObjectsInSensorRange, 
                                     SensorDetection &detection, 
                                     std::vector<Position> outline) override;
-    std::vector<Position> applyResolution(SensorDetection &detection, std::vector<Position> outline) override;
+    std::vector<Position> computeResolutionBounds(SensorDetection &detection, std::vector<Position> outline) override;
 };
 
 } // namespace artery

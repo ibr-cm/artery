@@ -68,7 +68,7 @@ protected:
                                         std::vector<std::shared_ptr<EnvironmentModelObject>> preselObjectsInSensorRange, 
                                         SensorDetection &detection, 
                                         std::vector<Position> outline) = 0;
-    virtual std::vector<Position> applyResolution(SensorDetection &detection, std::vector<Position> outline) = 0;
+    virtual std::vector<Position> computeResolutionBounds(SensorDetection &detection, std::vector<Position> outline) = 0;
 
     SensorConfigFov mFovConfig;
     Updatable<SensorDetection> mLastDetection;

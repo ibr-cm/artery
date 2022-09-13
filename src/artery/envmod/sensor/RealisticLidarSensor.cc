@@ -300,7 +300,7 @@ std::vector<Position> RealisticLidarSensor::filterLineOfSight(std::vector<std::s
     ;
 }
 
-std::vector<Position> RealisticLidarSensor::applyResolution(SensorDetection &detection, std::vector<Position> outline)
+std::vector<Position> RealisticLidarSensor::computeResolutionBounds(SensorDetection &detection, std::vector<Position> outline)
 {
     ;
 }
