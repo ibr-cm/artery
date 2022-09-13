@@ -22,16 +22,16 @@
         <route edges="gneE6 gneE4"/>
     </vehicle>
 
-    <vehicle id="object6" type="car" depart="6.00" departLane="1" departSpeed="0">
-        <route edges="gneE5 gneE4"/>
-    </vehicle>
-    <vehicle id="object7" type="overtaking" depart="7.00" departLane="0" departSpeed="0">
-        <route edges="gneE5 gneE4"/>
-    </vehicle>
 
     <vehicle id="object4" type="car" depart="10.00" departLane="0" departSpeed="speedLimit">
         <route edges="gneE0 gneE1"/>
     </vehicle>
 
+    <vehicle id="object6" type="car" depart="11.00" departLane="0" departSpeed="speedLimit">
+        <route edges="gneE5 gneE2"/>
+    </vehicle>
+    <vehicle id="object7_overtaking" type="overtaking" depart="12.0" departLane="1" departSpeed="speedLimit">
+        <route edges="gneE5 gneE2"/>
+    </vehicle>
 
 </routes>
