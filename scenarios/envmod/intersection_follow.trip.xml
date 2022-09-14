@@ -15,7 +15,7 @@
         <route edges="gneE0 gneE1"/>
     </vehicle>
     <vehicle id="object3" type="car" depart="2.00" departLane="1" departSpeed="speedLimit">
-        <route edges="gneE0 gneE1"/>
+        <route edges="gneE0 gneE2"/>
     </vehicle>
 
     <vehicle id="object5" type="car" depart="6.00" departLane="0" departSpeed="0">
