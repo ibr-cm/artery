@@ -137,12 +137,13 @@ std::vector<Position> RealisticRadarSensor::computeResolutionBounds(SensorDetect
 {
     std::vector<Position> resolution;
     std::vector<Position> hull;
+    // std::vector<std::tuple<Position, Position>> indistinguishablePoints;
 
-    for (auto objectPoint: outline)
+    for (std::vector<Position>::iterator objectPoint = outline.begin(); objectPoint != outline.end();)
     {
         // determine x and y distance to object
-        double xDistance = objectPoint.x.value() - detection.sensorOrigin.x.value();
-        double yDistance = objectPoint.y.value() - detection.sensorOrigin.y.value();
+        double xDistance = objectPoint->x.value() - detection.sensorOrigin.x.value();
+        double yDistance = objectPoint->y.value() - detection.sensorOrigin.y.value();
 
         // calculate polar angle to object
         double relativeAngle = atan2(yDistance,xDistance);
@@ -175,18 +176,36 @@ std::vector<Position> RealisticRadarSensor::computeResolutionBounds(SensorDetect
 
         // check if other objectPoints of same object are too close to each other
         bool selfCheck = false;
-        for (auto& selfObjectResolution : outline) {
-            if (selfCheck == false && selfObjectResolution == objectPoint) {
-                selfCheck = true;//if multiple points are on the exact same positions ignore first appearance
-                    continue;
+        bool mergedPoints = false;
+        for (std::vector<Position>::iterator selfObjectResolution = outline.begin(); selfObjectResolution != outline.end();) {
+
+            // check if point is in resolution box but not same point
+            if (selfObjectResolution != objectPoint) {
+                if (boost::geometry::within(*selfObjectResolution, box)) {
+                    double avgXDist = (objectPoint->x.value() + selfObjectResolution->x.value()) / 2.0;
+                    double avgYDist = (objectPoint->y.value() + selfObjectResolution->y.value()) / 2.0;
+
+                    selfObjectResolution = outline.erase(selfObjectResolution);
+                    objectPoint = outline.erase(objectPoint);
+
+                    outline.push_back(Position(avgXDist,avgYDist));
+                    mergedPoints = true;
+                    break;
                 }
 
-                if (resolution.empty() || !boost::geometry::within(selfObjectResolution, box)) {
-                    resolution.insert(resolution.end(),
-                                        std::make_move_iterator(box.begin()),
-                                        std::make_move_iterator(box.end()));
             }
+            ++selfObjectResolution;
         }
+
+        if (!mergedPoints) {
+            resolution.insert(resolution.end(),
+                std::make_move_iterator(box.begin()),
+                std::make_move_iterator(box.end()));
+        }
+        else {
+            objectPoint--;
+        }
+        objectPoint++;
     }
 
     boost::geometry::convex_hull(resolution, hull);
