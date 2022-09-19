@@ -56,9 +56,9 @@ std::vector<Position> RealisticRadarSensor::applyMeasurementInaccuracy(SensorDet
             continue;
         }
 
-        //get random noise for sensor. 95% of all values are within the accuracy of the sensor attribute
-        double angleError = normal(0, mFovConfig.fieldOfView.angleAccuracy.value() / 1.960);
-        double rangeError = normal(0, mFovConfig.fieldOfView.rangeAccuracy.value() / 1.960);
+        //get random noise for sensor. 99% of all values are within the accuracy of the sensor attribute
+        double angleError = normal(0, mSensorAngleAccuracy3Sigma);
+        double rangeError = normal(0, mSensorRangeAccuracy3Sigma);
     
         // precompute rotation values
         double cosAngleError = cos(angleError*PI/180.0);

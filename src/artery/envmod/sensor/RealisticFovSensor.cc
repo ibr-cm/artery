@@ -76,6 +76,10 @@ void RealisticFovSensor::initialize()
     mFovConfig.fieldOfView.minimalDistance = par("minimalDistance").doubleValue() * boost::units::si::meters;
     mFovConfig.numSegments = par("numSegments");
 
+    mSensorRangeAccuracy3Sigma = mFovConfig.fieldOfView.rangeAccuracy.value() / 2.576;
+    mSensorAngleAccuracy3Sigma =  mFovConfig.fieldOfView.angleAccuracy.value() / 2.576;
+    mSensorVelocityAccuracy3Sigma = mFovConfig.fieldOfView.velocityAccuracy.value() / 2.576;
+
     initializeVisualization();
 }
 

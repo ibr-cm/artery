@@ -76,6 +76,10 @@ protected:
     bool mDrawResolution;
     bool mDrawObjectWrapper;
 
+    double mSensorRangeAccuracy3Sigma;
+    double mSensorAngleAccuracy3Sigma;
+    double mSensorVelocityAccuracy3Sigma;
+
 private:
     omnetpp::cFigure::Color mColor;
     omnetpp::cGroupFigure* mGroupFigure;
