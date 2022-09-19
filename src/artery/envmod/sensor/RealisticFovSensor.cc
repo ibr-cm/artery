@@ -138,6 +138,7 @@ SensorDetection RealisticFovSensor::detectObjects()
     std::unordered_set<std::shared_ptr<EnvironmentModelObstacle>> blockingObstacles;
     auto graph = AdjList();
     std::map<std::shared_ptr<EnvironmentModelObject>, std::tuple<std::vector<Position>, std::vector<Position>, double, boost::graph_traits<AdjList>::vertex_descriptor>> noisyObjects;
+    std::vector<EnvironmentModelObjectWrapper> objectWrapper;
 
     // check if objects in sensor cone are hidden by another object or an obstacle
     for (const auto& object : preselObjectsInSensorRange)
@@ -232,7 +233,7 @@ SensorDetection RealisticFovSensor::detectObjects()
             }
 
             if (!unselectivePoints.empty()) {
-                EV_INFO << "Merging" << noisyObject.first->getExternalId() << " and " << otherNoisyObject.first->getExternalId() << std::endl;
+                EV_INFO << "Merging " << noisyObject.first->getExternalId() << " and " << otherNoisyObject.first->getExternalId() << std::endl;
                 auto object_vertex_decriptor = std::get<3>(noisyObject.second);
                 auto objectResolution_vertex_descriptor =  std::get<3>(otherNoisyObject.second);
                 boost::add_edge(object_vertex_decriptor, objectResolution_vertex_descriptor, graph);
@@ -269,7 +270,7 @@ SensorDetection RealisticFovSensor::detectObjects()
             size = 1;
         }
 
-        // filter all outline points which are not in line of sight
+        // filter all outline points which are not in line of sight and blocked by the object itself
         std::vector<Position> visibleObjectPoints;
         for (auto objectWrapperPoint : objectWrapperPoints)
         {
@@ -279,17 +280,45 @@ SensorDetection RealisticFovSensor::detectObjects()
 
             if (!bg::crosses(lineOfSight, objectWrapperPoints)) {
                 visibleObjectPoints.push_back(objectWrapperPoint);
-
-                if (mDrawLinesOfSight) {
-                    detection.visiblePoints.push_back(objectWrapperPoint);
-                }
             }
         }
 
         //create objectWrapper for each disjoint set
         boost::units::quantity<boost::units::si::velocity> averageVelocity = (sum/size) * boost::units::si::meters_per_second;
-        detection.objectWrapper.emplace_back(std::make_shared<EnvironmentModelObjectWrapper>(combinedObjects, visibleObjectPoints, averageVelocity));
+        objectWrapper.push_back(EnvironmentModelObjectWrapper(combinedObjects, visibleObjectPoints, averageVelocity));
     }
+
+    for (auto wrapper = objectWrapper.begin(); wrapper != objectWrapper.end(); wrapper++) {
+        bool objectWrapperOcculation = false;
+        for (auto objectPoint : wrapper->getNoisyOutline()) {
+
+            LineOfSight lineOfSight;
+            lineOfSight[0] = detection.sensorOrigin;
+            lineOfSight[1] = objectPoint;
+
+            for (auto blockingObjectWrapper = objectWrapper.begin(); blockingObjectWrapper != objectWrapper.end(); blockingObjectWrapper++) {
+                if (wrapper !=  blockingObjectWrapper) {
+                    if (blockingObjectWrapper->getNoisyOutline().size() > 2) {
+                        objectWrapperOcculation |= bg::crosses(lineOfSight, blockingObjectWrapper->getNoisyOutline());
+                    }
+                    else {
+                        objectWrapperOcculation |= bg::intersects(lineOfSight, blockingObjectWrapper->getNoisyOutline());
+                    }
+                }
+            }
+        }
+
+        if (!objectWrapperOcculation) {
+            detection.objectWrapper.emplace_back(std::make_shared<EnvironmentModelObjectWrapper>(*wrapper));
+
+            if (mDrawLinesOfSight) {
+                detection.visiblePoints.insert(detection.visiblePoints.end(),
+                    (wrapper->getNoisyOutline().begin()),
+                    (wrapper->getNoisyOutline().end()));
+            }
+        }
+    }
+
     detection.obstacles.assign(blockingObstacles.begin(), blockingObstacles.end());
     
     return detection;
