@@ -37,7 +37,7 @@ public:
      * Returns the polygon describing the object's noisy outline
      * @return noisy polygon points
      */
-    const std::vector<Position> getNoisyOutline() const { return mNoisyOutline; }
+    const std::vector<Position> &getNoisyOutline() const { return mNoisyOutline; }
 
     /**
      * Return the centre point coord of this vehicle object

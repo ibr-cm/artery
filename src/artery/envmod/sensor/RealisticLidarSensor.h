@@ -29,10 +29,10 @@ protected:
     
     std::vector<Position> applyMeasurementInaccuracy(SensorDetection &detection, std::vector<Position> outline) override;
     std::vector<double> applyVelocityInaccuracy(std::vector<Position> outline, vanetza::units::Velocity velocity) override;
-    std::vector<Position> filterLineOfSight(std::vector<std::shared_ptr<EnvironmentModelObstacle>> obstacleIntersections, 
-                                    std::vector<std::shared_ptr<EnvironmentModelObject>> preselObjectsInSensorRange, 
-                                    SensorDetection &detection, 
-                                    std::vector<Position> outline) override;
+    std::vector<Position> filterLineOfSight(const std::vector<std::shared_ptr<EnvironmentModelObstacle>> &obstacleIntersections,
+                                    const std::vector<std::shared_ptr<EnvironmentModelObject>> &preselObjectsInSensorRange,
+                                    const SensorDetection &detection,
+                                    const std::vector<Position> &outline) override;
     std::vector<Position> computeResolutionBounds(SensorDetection &detection, std::vector<Position> outline) override;
 };
 

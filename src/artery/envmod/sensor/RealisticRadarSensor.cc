@@ -85,24 +85,29 @@ std::vector<double> RealisticRadarSensor::applyVelocityInaccuracy(std::vector<Po
     std::vector<double> noisyVelocities;  
     for (auto objectPoint : outline)
     {
-        double velocityError = normal(0, mFovConfig.fieldOfView.velocityAccuracy.value() / 1.960);
+        double velocityError = normal(0, mSensorVelocityAccuracy3Sigma);
         noisyVelocities.push_back(velocity.value() + velocityError);
     }
     return noisyVelocities;
 }
 
-std::vector<Position> RealisticRadarSensor::filterLineOfSight(std::vector<std::shared_ptr<EnvironmentModelObstacle>> obstacleIntersections, 
-                                std::vector<std::shared_ptr<EnvironmentModelObject>> preselObjectsInSensorRange, 
-                                SensorDetection &detection, 
-                                std::vector<Position> outline)
+std::vector<Position> RealisticRadarSensor::filterLineOfSight(const std::vector<std::shared_ptr<EnvironmentModelObstacle>> &obstacleIntersections,
+                                const std::vector<std::shared_ptr<EnvironmentModelObject>> &preselObjectsInSensorRange,
+                                const SensorDetection &detection,
+                                const std::vector<Position> &outline)
 {
     namespace bg = boost::geometry;
 
-    std::unordered_set<std::shared_ptr<EnvironmentModelObstacle>> blockingObstacles;
+    // std::unordered_set<std::shared_ptr<EnvironmentModelObstacle>> blockingObstacles;
     std::vector<Position> visibleNoisyObjectPoints;
 
-    for (auto objectPoint : outline)
+    for (auto &objectPoint : outline)
     {
+        // skip objects points outside of sensor cone
+        if (!bg::covered_by(objectPoint, detection.sensorCone)) {
+            continue;
+        }
+
         LineOfSight lineOfSight;
         lineOfSight[0] = detection.sensorOrigin;
         lineOfSight[1] = objectPoint;
@@ -116,7 +121,7 @@ std::vector<Position> RealisticRadarSensor::filterLineOfSight(std::vector<std::s
                 [&](const std::shared_ptr<EnvironmentModelObstacle>& obstacle) {
                     ASSERT(obstacle);
                     if (bg::intersects(lineOfSight, obstacle->getOutline())) {
-                        blockingObstacles.insert(obstacle);
+                        // blockingObstacles.insert(obstacle);
                         return true;
                     } else {
                         return false;

@@ -292,10 +292,10 @@ std::vector<double> RealisticLidarSensor::applyVelocityInaccuracy(std::vector<Po
 }
 
 
-std::vector<Position> RealisticLidarSensor::filterLineOfSight(std::vector<std::shared_ptr<EnvironmentModelObstacle>> obstacleIntersections, 
-                                                        std::vector<std::shared_ptr<EnvironmentModelObject>> preselObjectsInSensorRange, 
-                                                        SensorDetection &detection, 
-                                                        std::vector<Position> outline)
+std::vector<Position> RealisticLidarSensor::filterLineOfSight(const std::vector<std::shared_ptr<EnvironmentModelObstacle>> &obstacleIntersections,
+                                                        const std::vector<std::shared_ptr<EnvironmentModelObject>> &preselObjectsInSensorRange,
+                                                        const SensorDetection &detection,
+                                                        const std::vector<Position> &outline)
 {
     ;
 }
