@@ -25,7 +25,7 @@ public:
     const std::string& getSensorCategory() const override;
 
 protected:
-    SensorDetection detectObjects() override;
+    // SensorDetection detectObjects() override;
     
     std::vector<Position> applyMeasurementInaccuracy(SensorDetection &detection, std::vector<Position> outline) override;
     std::vector<double> applyVelocityInaccuracy(std::vector<Position> outline, vanetza::units::Velocity velocity) override;
