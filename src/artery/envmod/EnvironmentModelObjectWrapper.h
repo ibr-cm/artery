@@ -33,6 +33,8 @@ public:
      */
     const std::vector<std::weak_ptr<EnvironmentModelObject>> getObjects() const { return mObjects; }
 
+    const std::set<uint32_t> getStationIDs() const { return mStationIDs; }
+    
     /**
      * Returns the polygon describing the object's noisy outline
      * @return noisy polygon points
@@ -65,26 +67,21 @@ private:
     std::vector<Position> mNoisyOutline;
     std::vector<Position> mResolutionHull;
     std::vector<std::weak_ptr<EnvironmentModelObject>> mObjects;
+    std::set<uint32_t> mStationIDs; //sorted station ids of the objects from mObjects
     Position mCentrePoint;
 
 };
 
     inline bool operator<(const EnvironmentModelObjectWrapper& left, const EnvironmentModelObjectWrapper& right) {
-        if (left.getObjects().size() < right.getObjects().size()) {
+        if (left.getStationIDs().size() < right.getStationIDs().size()) {
             return true;
-        } else if (left.getObjects().size() == right.getObjects().size()) {
-            int i = 0;
-            for (auto& lObj : left.getObjects()) {
-                if (!lObj.expired() && !right.getObjects().at(i).expired()) {
-                    auto lObjShr = lObj.lock();
-                    auto rObjShr = right.getObjects().at(i).lock();
-                    if (lObjShr->getExternalId() < rObjShr->getExternalId())
-                        return true;
-                //} else if (lObj.expired() && right.getObjects().at(i).expired()) {
-                } else {
+        } else if (left.getStationIDs().size() == right.getStationIDs().size()) {
+            auto rightID = right.getStationIDs().begin();
+            for (auto leftID : left.getStationIDs()) {
+                if (leftID < *rightID) {
                     return true;
                 }
-                i++;
+                rightID++;
             }
             return false;
         } else {

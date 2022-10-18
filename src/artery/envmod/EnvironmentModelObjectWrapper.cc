@@ -18,6 +18,13 @@ using Velocity = traci::VehicleType::Velocity;
 EnvironmentModelObjectWrapper::EnvironmentModelObjectWrapper(std::vector<std::weak_ptr<EnvironmentModelObject>> objectList, std::vector<Position> visibleObjectPoints, boost::units::quantity<boost::units::si::velocity> averageVelocity)
 {
     mObjects = objectList;
+    for (auto obj : mObjects) {
+        auto objShr = obj.lock();
+        if (objShr) {
+            auto id = objShr->getVehicleData().getStationId();
+            mStationIDs.emplace(id);
+        }
+    }
     mNoisyOutline = visibleObjectPoints;
     mVelocity = averageVelocity;
 
