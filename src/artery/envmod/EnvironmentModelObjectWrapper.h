@@ -76,7 +76,8 @@ private:
         if (left.getStationIDs().size() < right.getStationIDs().size()) {
             return true;
         } else if (left.getStationIDs().size() == right.getStationIDs().size()) {
-            auto rightID = right.getStationIDs().begin();
+            auto rightIDSet = right.getStationIDs();
+            auto rightID = rightIDSet.begin();
             for (auto leftID : left.getStationIDs()) {
                 if (leftID < *rightID) {
                     return true;
