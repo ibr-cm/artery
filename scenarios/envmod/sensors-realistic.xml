@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sensors>
+	<sensor name="NormalRadar" type="artery.envmod.sensor.RadarSensor" />
+	<!-- <sensor name="RealisticRadar" type="artery.envmod.sensor.RealisticRadarSensor" /> -->
+	<!-- <sensor name="ContinentalARS408NR" type="artery.envmod.sensor.ContinentalARS408NR" /> -->
+	<!-- <sensor name="ContinentalARS408FR" type="artery.envmod.sensor.ContinentalARS408FR" /> -->
+	<!-- <sensor name="BoschFrontRadar" type="artery.envmod.sensor.BoschFrontRadar" /> -->
+
+	<!-- <sensor name="ContinentalHRL131" type="artery.envmod.sensor.ContinentalHRL131" /> -->
+	<!-- <sensor name="InnovizOne" type="artery.envmod.sensor.InnovizOne" /> -->
+	<!-- <sensor name="IbeoLUX4L" type="artery.envmod.sensor.IbeoLUX4L" />  -->
+</sensors>
