@@ -3,8 +3,8 @@
 	<!-- <sensor name="FrontShortRangeRadar" type="artery.envmod.sensor.FrontRadar" /> -->
 	<!-- <sensor name="FrontLongRangeRadar" type="artery.envmod.sensor.FrontRadar" /> -->
 	<!-- <sensor name="RealisticRadar" type="artery.envmod.sensor.RealisticRadarSensor" /> -->
-	<sensor name="ContinentalARS408NR" type="artery.envmod.sensor.ContinentalARS408NR" /> -->
-	<sensor name="ContinentalARS408FR" type="artery.envmod.sensor.ContinentalARS408FR" />
+	<sensor name="FrontShortRangeRadar" type="artery.envmod.sensor.ContinentalARS408NR" /> -->
+	<sensor name="FrontLongRangeRadar" type="artery.envmod.sensor.ContinentalARS408FR" />
 	<!-- <sensor name="BoschFrontRadar" type="artery.envmod.sensor.BoschFrontRadar" /> -->
 
 	<!-- <sensor name="ContinentalHRL131" type="artery.envmod.sensor.ContinentalHRL131" /> -->
