@@ -3,9 +3,9 @@
 	<service type="artery.application.CaService" name="CA">
 		<listener port="2001" />
 	    </service>
-	<service type="artery.envmod.service.CollectivePerceptionMockService" name="CP">
+	<!-- <service type="artery.envmod.service.CollectivePerceptionMockService" name="CP">
 		<listener port="3002" />
-	</service>
+	</service> -->
 	<service type="artery.envmod.service.EnvmodPrinter">
 		<listener port="3001" />
 	</service>
