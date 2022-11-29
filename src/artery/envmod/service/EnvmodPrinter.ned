@@ -10,4 +10,6 @@ import artery.application.ItsG5Service;
 
 simple EnvmodPrinter like ItsG5Service
 {
+        @signal[RadarObjects](type=unsigned long);
+        @statistic[RadarObjects](source=RadarObjects;record=vector);
 }

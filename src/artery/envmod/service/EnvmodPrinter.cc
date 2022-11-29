@@ -17,6 +17,9 @@ namespace artery
 
 Define_Module(EnvmodPrinter)
 
+
+static const omnetpp::simsignal_t scSignalRadarObjects = omnetpp::cComponent::registerSignal("RadarObjects");
+
 void EnvmodPrinter::initialize()
 {
     ItsG5Service::initialize();
@@ -30,7 +33,10 @@ void EnvmodPrinter::trigger()
     auto& allObjects = mLocalEnvironmentModel->allObjects();
 
     EV_DETAIL << mEgoId << "--- By category ---" << std::endl;
-    printSensorObjectList("Radar Sensor Object List", filterBySensorCategory(allObjects, "Radar"));
+    const TrackedObjectsFilterRange& radarObjs = filterBySensorCategory(allObjects, "Radar");
+    emit(scSignalRadarObjects, boost::size(radarObjs));
+    printSensorObjectList("Radar Sensor Object List", radarObjs);
+
     printSensorObjectList("CAM Sensor Object List", filterBySensorCategory(allObjects, "CA"));
 
     EV_DETAIL << mEgoId << "--- By name ---" << std::endl;
