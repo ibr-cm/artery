@@ -6,7 +6,7 @@
 	<!-- <service type="artery.envmod.service.CollectivePerceptionMockService" name="CP">
 		<listener port="3002" />
 	</service> -->
-	<service type="artery.envmod.service.EnvmodPrinter">
+	<!-- <service type="artery.envmod.service.EnvmodPrinter">
 		<listener port="3001" />
-	</service>
+	</service> -->
 </services>
