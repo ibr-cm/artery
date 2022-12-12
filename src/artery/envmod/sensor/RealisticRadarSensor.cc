@@ -138,12 +138,13 @@ std::vector<Position> RealisticRadarSensor::filterLineOfSight(const std::vector<
     return visibleNoisyObjectPoints;
 }
 
-std::vector<Position> RealisticRadarSensor::computeResolutionBounds(SensorDetection &detection, std::vector<Position> outline)
+std::vector<Position> RealisticRadarSensor::computeResolutionBounds(SensorDetection &detection, std::vector<Position> outline, std::vector<double> velocities)
 {
     std::vector<Position> resolution;
     std::vector<Position> hull;
     // std::vector<std::tuple<Position, Position>> indistinguishablePoints;
 
+    std::vector<double>::iterator objectPointVelocity = velocities.begin();
     for (std::vector<Position>::iterator objectPoint = outline.begin(); objectPoint != outline.end();)
     {
         // determine x and y distance to object
@@ -162,6 +163,7 @@ std::vector<Position> RealisticRadarSensor::computeResolutionBounds(SensorDetect
         // calculate selectivity based on range to object
         double rangeSelectivity = mFovConfig.fieldOfView.rangeResolution.value() / 2.0;
         double angularSelectivity = objectDistance * tan((mFovConfig.fieldOfView.angleResolution.value() / 2.0) * PI/180.0);
+        double velocitySelectivity = mFovConfig.fieldOfView.velocityResolution.value() / 2.0;
 
         // selectivity box
         std::vector<Position> selectivity = {
@@ -182,20 +184,27 @@ std::vector<Position> RealisticRadarSensor::computeResolutionBounds(SensorDetect
         // check if other objectPoints of same object are too close to each other
         bool selfCheck = false;
         bool mergedPoints = false;
+
+        std::vector<double>::iterator selfObjectResolutionVelocity = velocities.begin();
         for (std::vector<Position>::iterator selfObjectResolution = outline.begin(); selfObjectResolution != outline.end();) {
 
             // check if point is in resolution box but not same point
             if (selfObjectResolution != objectPoint) {
                 if (boost::geometry::within(*selfObjectResolution, box)) {
-                    double avgXDist = (objectPoint->x.value() + selfObjectResolution->x.value()) / 2.0;
-                    double avgYDist = (objectPoint->y.value() + selfObjectResolution->y.value()) / 2.0;
+                    if (
+                        (selfObjectResolutionVelocity - velocitySelectivity) < objectPointVelocity
+                        || (selfObjectResolutionVelocity + velocitySelectivity) > objectPointVelocity
+                    ) {
+                        double avgXDist = (objectPoint->x.value() + selfObjectResolution->x.value()) / 2.0;
+                        double avgYDist = (objectPoint->y.value() + selfObjectResolution->y.value()) / 2.0;
 
-                    selfObjectResolution = outline.erase(selfObjectResolution);
-                    objectPoint = outline.erase(objectPoint);
+                        selfObjectResolution = outline.erase(selfObjectResolution);
+                        objectPoint = outline.erase(objectPoint);
 
-                    outline.push_back(Position(avgXDist,avgYDist));
-                    mergedPoints = true;
-                    break;
+                        outline.push_back(Position(avgXDist,avgYDist));
+                        mergedPoints = true;
+                        break;
+                    }
                 }
 
             }
@@ -211,6 +220,7 @@ std::vector<Position> RealisticRadarSensor::computeResolutionBounds(SensorDetect
             objectPoint--;
         }
         objectPoint++;
+        objectPointVelocity++;
     }
 
     boost::geometry::convex_hull(resolution, hull);

@@ -25,7 +25,7 @@ protected:
                                     const std::vector<std::shared_ptr<EnvironmentModelObject>> &preselObjectsInSensorRange,
                                     const SensorDetection &detection,
                                     const std::vector<Position> &outline) override;
-    std::vector<Position> computeResolutionBounds(SensorDetection &detection, std::vector<Position> outline) override;
+    std::vector<Position> computeResolutionBounds(SensorDetection &detection, std::vector<Position> outline, std::vector<double> velocities) override;
 };
 
 } // namespace artery

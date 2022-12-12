@@ -456,7 +456,7 @@ std::vector<Position> RealisticLidarSensor::filterLineOfSight(const std::vector<
     return visibleNoisyObjectPoints;
 }
 
-std::vector<Position> RealisticLidarSensor::computeResolutionBounds(SensorDetection &detection, std::vector<Position> outline)
+std::vector<Position> RealisticLidarSensor::computeResolutionBounds(SensorDetection &detection, std::vector<Position> outline, std::vector<double> velocities)
 {
 
 

@@ -161,7 +161,7 @@ SensorDetection RealisticFovSensor::detectObjects()
             //calculate average velocity for object
             double averageNoisyVelocity = std::accumulate(noisyVelocities.begin(), noisyVelocities.end(), 0.0) / noisyVelocities.size();
 
-            std::vector<Position> resolutionHull = computeResolutionBounds(detection, visibleNoisyObjectPoints);
+            std::vector<Position> resolutionHull = computeResolutionBounds(detection, visibleNoisyObjectPoints, noisyVelocities);
 
             //create vertex for every detected object
             Node vertexNode;
